@@ -1,0 +1,306 @@
+{
+    "connections": [
+        {
+            "fromNode": 0,
+            "fromSocket": "UV",
+            "toNode": 1,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 1,
+            "fromSocket": "Vector",
+            "toNode": 4,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 4,
+            "fromSocket": "Color",
+            "toNode": 2,
+            "toSocket": "Water Mask"
+        },
+        {
+            "fromNode": 5,
+            "fromSocket": "Normal",
+            "toNode": 3,
+            "toSocket": "Surface"
+        },
+        {
+            "fromNode": 2,
+            "fromSocket": "Color",
+            "toNode": 5,
+            "toSocket": "Height"
+        }
+    ],
+    "nodes": [
+        {
+            "inputs": [
+                {
+                    "name": "Type",
+                    "value": 1
+                }
+            ],
+            "name": "Texture Coordinate",
+            "type": "Texture Coordinate",
+            "x": -1041,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Location",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Rotation",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": {
+                        "x": 1,
+                        "y": 1,
+                        "z": 1
+                    }
+                }
+            ],
+            "name": "Mapping",
+            "type": "Mapping",
+            "x": -691,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Water Mask",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": 5
+                },
+                {
+                    "name": "Distortion",
+                    "value": 20
+                },
+                {
+                    "name": "Width",
+                    "value": 0.02
+                },
+                {
+                    "name": "Width Variation",
+                    "value": 0.5
+                },
+                {
+                    "name": "Attenuation",
+                    "value": 0
+                },
+                {
+                    "name": "Source Count",
+                    "value": 10
+                },
+                {
+                    "name": "Points",
+                    "value": 50
+                },
+                {
+                    "name": "Seed",
+                    "value": 0
+                },
+                {
+                    "name": "Target Color",
+                    "value": {
+                        "a": 255,
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    }
+                },
+                {
+                    "name": "Tolerance",
+                    "value": 0.1
+                },
+                {
+                    "name": "Merge Distance",
+                    "value": 0.15
+                },
+                {
+                    "name": "River Color",
+                    "value": {
+                        "a": 255,
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    }
+                },
+                {
+                    "name": "Dest Color",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                },
+                {
+                    "name": "Dest Count",
+                    "value": 30
+                },
+                {
+                    "name": "Dest Tolerance",
+                    "value": 0.515
+                },
+                {
+                    "name": "Dest Merge Dist",
+                    "value": 0.15
+                },
+                {
+                    "name": "Map Size",
+                    "value": 512
+                },
+                {
+                    "name": "Min Distance",
+                    "value": 0.2725
+                }
+            ],
+            "name": "River Texture",
+            "type": "River Texture",
+            "x": 109,
+            "y": -746
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Surface",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                }
+            ],
+            "name": "Material Output",
+            "type": "Material Output",
+            "x": 1299.0449999999998,
+            "y": 76.19500000000005
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": 1
+                },
+                {
+                    "name": "Flow",
+                    "value": 2
+                },
+                {
+                    "name": "Grid Size",
+                    "value": 1
+                },
+                {
+                    "name": "Threshold Min",
+                    "value": 0.8
+                },
+                {
+                    "name": "Threshold Max",
+                    "value": 0.88
+                },
+                {
+                    "name": "Seed",
+                    "value": 809
+                },
+                {
+                    "name": "Map Size",
+                    "value": 512
+                },
+                {
+                    "name": "Detail",
+                    "value": 15
+                },
+                {
+                    "name": "Roughness",
+                    "value": 0.736
+                },
+                {
+                    "name": "Lacunarity",
+                    "value": 2
+                },
+                {
+                    "name": "Mix Factor",
+                    "value": 0.273
+                }
+            ],
+            "name": "Water Source",
+            "type": "Water Source",
+            "x": -331,
+            "y": -490
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Strength",
+                    "value": 1
+                },
+                {
+                    "name": "Distance",
+                    "value": 27.3
+                },
+                {
+                    "name": "Height",
+                    "value": 0
+                },
+                {
+                    "name": "Normal",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 1
+                    }
+                }
+            ],
+            "invert": false,
+            "name": "Bump",
+            "type": "Bump",
+            "x": 680.7436428125022,
+            "y": 171.41928749999943
+        }
+    ]
+}

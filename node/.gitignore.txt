@@ -1,0 +1,9 @@
+# IDE and environment files
+.qtcreator/
+.vscode/
+.vs/
+.continue/
+build/
+*.suo
+*.user
+*.log

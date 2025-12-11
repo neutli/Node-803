@@ -1,0 +1,95 @@
+cmake_minimum_required(VERSION 3.16)
+project(NodeEditor)
+
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(Qt6 COMPONENTS Widgets Concurrent REQUIRED)
+
+add_executable(NodeEditor
+    main.cpp
+    mainwindow.cpp
+    mainwindow.h
+    appsettings.h
+    nodeeditorwidget.cpp
+    nodeeditorwidget.h
+    commands.cpp
+    commands.h
+    nodegraphicsitem.cpp
+    nodegraphicsitem.h
+    node.cpp
+    node.h
+    sliderspinbox.cpp
+    sliderspinbox.h
+    noisetexturenode.cpp
+    noisetexturenode.h
+    voronoinode.cpp
+    voronoinode.h
+    outputnode.cpp
+    outputnode.h
+    invertnode.cpp
+    invertnode.h
+    rivernode.cpp
+    rivernode.h
+    watersourcenode.cpp
+    watersourcenode.h
+    mappingnode.cpp
+    mappingnode.h
+    texturecoordinatenode.cpp
+    texturecoordinatenode.h
+    mathnode.cpp
+    mathnode.h
+    vectormathnode.cpp
+    vectormathnode.h
+    noderegistry.cpp
+    noderegistry.h
+    colorrampnode.cpp
+    colorrampnode.h
+    colorrampwidget.cpp
+    colorrampwidget.h
+    watersourcerampwidget.cpp
+    watersourcerampwidget.h
+    mixnode.cpp
+    mixnode.h
+    bumpnode.cpp
+    bumpnode.h
+    maprangenode.cpp
+    maprangenode.h
+    principledbsdfnode.cpp
+    principledbsdfnode.h
+    mixshadernode.cpp
+    mixshadernode.h
+    nodegraphbuilder.cpp
+    nodegraphbuilder.h
+    noise.cpp
+    noise.h
+    OpenSimplex2.cpp
+    OpenSimplex2S.cpp
+    OpenSimplex2.hpp
+    connectiongraphicsitem.cpp
+    connectiongraphicsitem.h
+    imagetexturenode.cpp
+    imagetexturenode.h
+    separatexyznode.cpp
+    separatexyznode.h
+    combinexyznode.cpp
+    combinexyznode.h
+    clampnode.cpp
+    clampnode.h
+    wavetexturenode.cpp
+    wavetexturenode.h
+    bricktexturenode.cpp
+    bricktexturenode.h
+    radialtilingnode.cpp
+    radialtilingnode.h
+    calculusnode.cpp
+    calculusnode.h
+    outputviewerwidget.cpp
+    outputviewerwidget.h
+    rendercontext.cpp
+    rendercontext.h
+    mainwindow.ui
+)
+
+target_link_libraries(NodeEditor Qt6::Widgets Qt6::Concurrent)

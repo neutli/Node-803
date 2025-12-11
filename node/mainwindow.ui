@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menufile">
+    <property name="title">
+     <string>ファイル</string>
+    </property>
+    <addaction name="actionexit"/>
+    <addaction name="actionecport"/>
+    <addaction name="actionescape"/>
+    <addaction name="actionsave"/>
+    <addaction name="action"/>
+    <addaction name="action_2"/>
+    <addaction name="action_3"/>
+   </widget>
+   <widget class="QMenu" name="menurun">
+    <property name="title">
+     <string>実行</string>
+    </property>
+    <addaction name="actionactionRun"/>
+   </widget>
+   <addaction name="menufile"/>
+   <addaction name="menurun"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionexit">
+   <property name="text">
+    <string>やめる</string>
+   </property>
+  </action>
+  <action name="actionecport">
+   <property name="text">
+    <string>エクスポート</string>
+   </property>
+  </action>
+  <action name="actionescape">
+   <property name="text">
+    <string>escape</string>
+   </property>
+  </action>
+  <action name="actionsave">
+   <property name="text">
+    <string>セーブ</string>
+   </property>
+  </action>
+  <action name="actionactionRun">
+   <property name="text">
+    <string>実行する</string>
+   </property>
+  </action>
+  <action name="action">
+   <property name="text">
+    <string>ノードを保存</string>
+   </property>
+  </action>
+  <action name="action_2">
+   <property name="text">
+    <string>読み込み</string>
+   </property>
+  </action>
+  <action name="action_3">
+   <property name="text">
+    <string>設定</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>MainWindow</sender>
+   <signal>windowIconTextChanged(QString)</signal>
+   <receiver>MainWindow</receiver>
+   <slot>close()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>399</x>
+     <y>299</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>399</x>
+     <y>299</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
