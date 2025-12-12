@@ -157,6 +157,21 @@ NodeGraphicsItem::NodeGraphicsItem(Node* node, QGraphicsItem* parent)
 }
 
 NodeGraphicsItem::~NodeGraphicsItem() {
+    // Disconnect all widgets to prevent callbacks during destruction (e.g. popup closed triggers setZValue)
+    for (auto* proxy : m_parameterWidgets) {
+        if (proxy && proxy->widget()) {
+            QWidget* container = proxy->widget();
+            container->disconnect(this);
+            
+            // The widget is often a container, so we must disconnect its children (like QComboBox)
+            // which are the actual signal senders.
+            const QList<QWidget*> children = container->findChildren<QWidget*>();
+            for (auto* child : children) {
+                child->disconnect(this);
+            }
+        }
+    }
+
     if (m_node) {
         // Unregister callbacks to prevent use-after-free if Node outlives GraphicsItem
         m_node->setStructureChangedCallback(nullptr);

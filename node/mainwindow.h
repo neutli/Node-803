@@ -62,9 +62,13 @@ private:
     
     // Material system UI
     QComboBox* m_materialCombo;
+    QString m_lastMaterialName; // Track active material for saving
     void updateMaterialList();
     void onMaterialChanged(int index);
     void onAddMaterial();
     void onDeleteMaterial();
+    
+    void loadStartupGraph();
+    void loadNewMaterialGraph();
 };
 #endif // MAINWINDOW_H

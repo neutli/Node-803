@@ -214,6 +214,16 @@
             "y": 76.19500000000005
         },
         {
+            "colorRampStops": [
+                {
+                    "color": "#ff000000",
+                    "position": 0
+                },
+                {
+                    "color": "#ffffffff",
+                    "position": 0.27058823529411763
+                }
+            ],
             "inputs": [
                 {
                     "name": "Vector",
@@ -224,54 +234,42 @@
                     }
                 },
                 {
-                    "name": "Scale",
+                    "name": "Position X",
+                    "value": 0
+                },
+                {
+                    "name": "Position Y",
+                    "value": 0
+                },
+                {
+                    "name": "Distortion",
+                    "value": 0.5
+                },
+                {
+                    "name": "Noise Scale",
                     "value": 1
-                },
-                {
-                    "name": "Flow",
-                    "value": 2
-                },
-                {
-                    "name": "Grid Size",
-                    "value": 1
-                },
-                {
-                    "name": "Threshold Min",
-                    "value": 0.8
-                },
-                {
-                    "name": "Threshold Max",
-                    "value": 0.88
-                },
-                {
-                    "name": "Seed",
-                    "value": 809
-                },
-                {
-                    "name": "Map Size",
-                    "value": 512
                 },
                 {
                     "name": "Detail",
-                    "value": 15
+                    "value": 5.8
                 },
                 {
                     "name": "Roughness",
-                    "value": 0.736
+                    "value": 0.8
                 },
                 {
                     "name": "Lacunarity",
                     "value": 2
                 },
                 {
-                    "name": "Mix Factor",
-                    "value": 0.273
+                    "name": "Seed",
+                    "value": 803
                 }
             ],
             "name": "Water Source",
             "type": "Water Source",
             "x": -331,
-            "y": -490
+            "y": -489.4282467544069
         },
         {
             "inputs": [

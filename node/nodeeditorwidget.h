@@ -36,6 +36,7 @@ public:
     // Serialization
     void saveToFile(const QString& filename);
     void loadFromFile(const QString& filename);
+    void loadFromData(const QByteArray& data);
     
     // FPS Control
     void setShowFPS(bool show) { m_showFPS = show; update(); }

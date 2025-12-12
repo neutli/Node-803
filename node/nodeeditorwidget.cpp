@@ -754,15 +754,45 @@ void NodeEditorWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     
-    // R: Rotate selected nodes (toggle 0, 90, 180, 270 degrees)
+    // R: Reset selected nodes to default state
     if (event->key() == Qt::Key_R && !(event->modifiers() & Qt::ControlModifier)) {
         QList<QGraphicsItem*> selected = m_scene->selectedItems();
+        bool changed = false;
+        
         for (QGraphicsItem* item : selected) {
             if (NodeGraphicsItem* nodeItem = dynamic_cast<NodeGraphicsItem*>(item)) {
-                qreal currentRotation = nodeItem->rotation();
-                qreal newRotation = fmod(currentRotation + 90, 360);
-                nodeItem->setRotation(newRotation);
+                Node* node = nodeItem->node();
+                if (!node) continue;
+                
+                // Get type from current state
+                QJsonObject currentJson = node->save();
+                QString type = currentJson["type"].toString();
+                
+                // Fallback: Use name as type if type is missing (common case)
+                if (type.isEmpty()) {
+                    type = currentJson["name"].toString();
+                }
+                
+                if (!type.isEmpty()) {
+                    // Create a temporary default node to get default state
+                    std::unique_ptr<Node> defaultNode(NodeRegistry::instance().createNode(type));
+                    if (defaultNode) {
+                        QJsonObject defaultJson = defaultNode->save();
+                        
+                        // Restore default state to the selected node
+                        node->restore(defaultJson);
+                        
+                        nodeItem->update();
+                        changed = true;
+                    } else {
+                        qDebug() << "Failed to create default node for type:" << type;
+                    }
+                }
             }
+        }
+        
+        if (changed) {
+            emit parameterChanged();
         }
         event->accept();
         return;
@@ -979,6 +1009,10 @@ void NodeEditorWidget::loadFromFile(const QString& filename) {
     if (!file.open(QIODevice::ReadOnly)) return;
     
     QByteArray data = file.readAll();
+    loadFromData(data);
+}
+
+void NodeEditorWidget::loadFromData(const QByteArray& data) {
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonObject root = doc.object();
     
@@ -994,6 +1028,9 @@ void NodeEditorWidget::loadFromFile(const QString& filename) {
     m_tempConnection = nullptr;
     m_dragSourceSocket = nullptr;
     
+    // Re-setup scene (grid etc)
+    setupScene();
+    
     // Load Nodes
     QJsonArray nodesArray = root["nodes"].toArray();
     for (const QJsonValue& val : nodesArray) {
@@ -1003,15 +1040,18 @@ void NodeEditorWidget::loadFromFile(const QString& filename) {
         Node* node = NodeRegistry::instance().createNode(type);
         if (node) {
             node->restore(nodeJson);
+            // Assuming node->restore() restores the position. 
+            // If not, we need to manually read x/y again, but restore usually does.
+            // Wait, the original code called `addNode(node, node->position())`.
+            // node->restore likely sets m_position.
+            // Let's verify if `restore` reads x/y. Usually yes.
+            // In original code:
+            // node->restore(nodeJson);
+            // addNode(node, node->position());
+            // So I should keep that pattern.
             addNode(node, node->position());
         } else {
-            // Create a placeholder or skip?
-            // For now, if node type not found, we skip (might break connections)
-            // To keep indices aligned, we might need a null placeholder in m_nodes if we used index-based connections
-            // But m_nodes is appended to in addNode.
-            // If we skip, indices shift.
-            // Ideally we should have a "Missing Node" type.
-            // For simplicity, we assume all types exist.
+             // Skip unknown node types
         }
     }
     
@@ -1040,15 +1080,8 @@ void NodeEditorWidget::loadFromFile(const QString& filename) {
                     m_connections.append(connection);
                     
                     // Visual connection
-                    // We need to find the graphics items for these sockets
                     NodeGraphicsItem* fromItem = m_nodeItems[fromIndex];
                     NodeGraphicsItem* toItem = m_nodeItems[toIndex];
-                    
-                    // This is tricky because NodeGraphicsItem doesn't expose sockets easily by name
-                    // But we can iterate its child items or use a helper
-                    // Let's assume we can get them via getSocketPosition logic or similar
-                    // Actually, NodeGraphicsItem creates NodeGraphicsSocket children.
-                    // We can iterate children of NodeGraphicsItem.
                     
                     auto findSocketItem = [](NodeGraphicsItem* nodeItem, NodeSocket* s) -> NodeGraphicsSocket* {
                         for (QGraphicsItem* child : nodeItem->childItems()) {

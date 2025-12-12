@@ -66,6 +66,13 @@ MainWindow::MainWindow(QWidget *parent)
     m_materialCombo = new QComboBox(materialToolbar);
     m_materialCombo->setMinimumWidth(150);
     m_materialCombo->addItem("Material");
+    m_lastMaterialName = "Material";
+
+    // Ensure materials directory exists
+    QDir dir(QCoreApplication::applicationDirPath());
+    if (!dir.exists("materials")) {
+        dir.mkdir("materials");
+    }
     
     QPushButton* addMatBtn = new QPushButton("+", materialToolbar);
     addMatBtn->setFixedWidth(30);
@@ -464,49 +471,7 @@ MainWindow::MainWindow(QWidget *parent)
     editMenu->addAction(redoAction);
     
     // Load default scene if exists
-    QString defaultScenePath = "c:/Users/Minxue/Documents/node/default_scene.json";
-    if (QFile::exists(defaultScenePath)) {
-        m_nodeEditor->loadFromFile(defaultScenePath);
-        qDebug() << "Loaded default scene from" << defaultScenePath;
-    } else {
-        // Fallback: Hardcoded initialization
-        TextureCoordinateNode* texCoordNode = new TextureCoordinateNode();
-        m_nodeEditor->addNode(texCoordNode, QPointF(-600, 100));
-        
-        MappingNode* mappingNode = new MappingNode();
-        m_nodeEditor->addNode(mappingNode, QPointF(-250, 100));
-        
-        NoiseTextureNode* noiseNode = new NoiseTextureNode();
-        m_nodeEditor->addNode(noiseNode, QPointF(100, 100));
-
-        RiverNode* riverNode = new RiverNode();
-        m_nodeEditor->addNode(riverNode, QPointF(100, 300));
-        
-        OutputNode* outputNode = new OutputNode();
-        m_nodeEditor->addNode(outputNode, QPointF(450, 100));
-        
-        // Connect nodes
-        NodeSocket* texCoordUV = texCoordNode->findOutputSocket("UV");
-        NodeSocket* mappingVector = mappingNode->findInputSocket("Vector");
-        if (texCoordUV && mappingVector) {
-            texCoordUV->addConnection(mappingVector);
-            mappingVector->addConnection(texCoordUV);
-        }
-        
-        NodeSocket* mappingOut = mappingNode->findOutputSocket("Vector");
-        NodeSocket* noiseVector = noiseNode->findInputSocket("Vector");
-        NodeSocket* riverVector = riverNode->findInputSocket("Vector");
-        
-        if (mappingOut && noiseVector) {
-            mappingOut->addConnection(noiseVector);
-            noiseVector->addConnection(mappingOut);
-        }
-        
-        if (mappingOut && riverVector) {
-            mappingOut->addConnection(riverVector);
-            riverVector->addConnection(mappingOut);
-        }
-    }
+    loadStartupGraph();
     
     qDebug() << "MainWindow: Connections done";
     
@@ -696,55 +661,33 @@ void MainWindow::onAddMaterial() {
     QString name = QString("Material.%1").arg(++matCount);
     
     // Save current graph
-    QString currentName = m_materialCombo->currentText();
-    m_nodeEditor->saveToFile("materials/" + currentName + ".json");
+    // Use m_lastMaterialName to be sure what we are saving
+    if (!m_lastMaterialName.isEmpty()) {
+        QString savePath = QCoreApplication::applicationDirPath() + "/materials/" + m_lastMaterialName + ".json";
+        m_nodeEditor->saveToFile(savePath);
+    }
     
     // Add new material
     m_materialCombo->addItem(name);
+    // Block signals to prevent double-save logic in onMaterialChanged for this specific transition if desired,
+    // but onMaterialChanged logic handles "save previous" which is consistent.
+    // However, we just saved "current". 
+    // Let's update m_lastMaterialName to the NEW name manually if we want to skip onMaterialChanged save?
+    // Actually, onMaterialChanged will see index change.
+    
     m_materialCombo->setCurrentIndex(m_materialCombo->count() - 1);
     
-    // Clear editor for new material
-    m_nodeEditor->clear();
-
-    // Create Default Nodes
-    OutputNode* outNode = new OutputNode();
-    m_nodeEditor->addNode(outNode, QPointF(1283.75, 423.29));
-
-    ImageTextureNode* imageNode = new ImageTextureNode();
-    imageNode->setStretchToFit(false);
-    imageNode->setRepeat(false);
-    imageNode->setKeepAspectRatio(false);
-    // Assuming scale is 1,1 by default or handled by node. 
-    // User JSON says scaleX: 1, scaleY: 1.
-    m_nodeEditor->addNode(imageNode, QPointF(987.52, 272.97));
-
-    MappingNode* mappingNode = new MappingNode();
-    m_nodeEditor->addNode(mappingNode, QPointF(628.82, 234.62));
-
-    TextureCoordinateNode* texCoordNode = new TextureCoordinateNode();
-    m_nodeEditor->addNode(texCoordNode, QPointF(182.84, 258.42));
-
-    // Connect Nodes
-    // TexCoord UV -> Mapping Vector
-    NodeSocket* uvSocket = texCoordNode->findOutputSocket("UV");
-    NodeSocket* mapVectorIn = mappingNode->findInputSocket("Vector");
-    if (uvSocket && mapVectorIn) {
-        m_nodeEditor->createConnection(uvSocket, mapVectorIn);
-    }
-
-    // Mapping Vector -> Image Vector
-    NodeSocket* mapVectorOut = mappingNode->findOutputSocket("Vector");
-    NodeSocket* imageVectorIn = imageNode->findInputSocket("Vector");
-    if (mapVectorOut && imageVectorIn) {
-        m_nodeEditor->createConnection(mapVectorOut, imageVectorIn);
-    }
-
-    // Image Color -> Output Surface
-    NodeSocket* colorSocket = imageNode->findOutputSocket("Color");
-    NodeSocket* surfaceSocket = outNode->findInputSocket("Surface");
-    if (colorSocket && surfaceSocket) {
-        m_nodeEditor->createConnection(colorSocket, surfaceSocket);
-    }
+    // Note: setCurrentIndex triggers onMaterialChanged. 
+    // onMaterialChanged will try to save 'm_lastMaterialName' (which is the old one).
+    // This effectively saves it TWICE. One explicit here, one in slot.
+    // To be cleaner, we can remove the explicit save here and let onMaterialChanged handle it.
+    // But onAddMaterial needs to ensure the NEW material starts clean/default.
+    
+    // Let's rely on onMaterialChanged for saving the old one.
+    // ALL we do here is add item and switch.
+    // BUT we need to clear/init the new one.
+    // onMaterialChanged loads file. If New material file doesn't exist, it clears.
+    // So we just need to detect "File doesn't exist" -> Load Default.
 }
 
 void MainWindow::onDeleteMaterial() {
@@ -757,7 +700,18 @@ void MainWindow::onDeleteMaterial() {
     QString name = m_materialCombo->currentText();
     
     // Remove file
-    QFile::remove("materials/" + name + ".json");
+    QString path = QCoreApplication::applicationDirPath() + "/materials/" + name + ".json";
+    QFile::remove(path);
+    
+    // Update state BEFORE removing from combo, because removing might trigger change?
+    // Removing item triggers currentIndexChanged if current item is removed.
+    // We want the new selection to be handled gracefully.
+    
+    // If we remove current, combo picks a new one. onMaterialChanged fires.
+    // It will try to save "name" (which we just deleted? No, m_lastMaterialName is "name").
+    // We should probably prevent saving the deleted material.
+    
+    m_lastMaterialName = ""; // Prevent saving the material we are about to delete
     
     // Remove from combo
     m_materialCombo->removeItem(index);
@@ -766,25 +720,515 @@ void MainWindow::onDeleteMaterial() {
 void MainWindow::onMaterialChanged(int index) {
     if (index < 0 || !m_nodeEditor) return;
     
-    // Save current material first (if not already saved)
-    static QString lastMaterial;
-    if (!lastMaterial.isEmpty() && lastMaterial != m_materialCombo->itemText(index)) {
-        m_nodeEditor->saveToFile("materials/" + lastMaterial + ".json");
+    // Stop processing unused/old material to save memory/cpu
+    if (m_autoUpdateTimer->isActive()) {
+        m_autoUpdateTimer->stop();
     }
     
-    // Load the new material
-    QString name = m_materialCombo->itemText(index);
-    QString path = "materials/" + name + ".json";
+    QString newMaterialName = m_materialCombo->itemText(index);
+
+    // Save previous material
+    if (!m_lastMaterialName.isEmpty() && m_lastMaterialName != newMaterialName) {
+        QString savePath = QCoreApplication::applicationDirPath() + "/materials/" + m_lastMaterialName + ".json";
+        m_nodeEditor->saveToFile(savePath);
+        qDebug() << "Saved previous material:" << m_lastMaterialName;
+    }
+    
+    // Load new material
+    QString path = QCoreApplication::applicationDirPath() + "/materials/" + newMaterialName + ".json";
     
     if (QFile::exists(path)) {
         m_nodeEditor->loadFromFile(path);
+        qDebug() << "Loaded material:" << newMaterialName;
     } else {
-        m_nodeEditor->clear();
+        // New material or missing file -> Load Default
+        qDebug() << "New/Missing material, loading default:" << newMaterialName;
+        // Check if it's a "fresh" start (not deleted file)
+        // If we just added it, we want default graph.
+        m_nodeEditor->clear(); 
+        loadNewMaterialGraph();
     }
     
-    lastMaterial = name;
+    m_lastMaterialName = newMaterialName;
 }
 
 void MainWindow::updateMaterialList() {
     // Not implemented yet - would scan materials folder
+}
+
+// Startup Graph (Image/BSDF) - Used on initial boot
+void MainWindow::loadStartupGraph() {
+    // Load embedded default scene
+    const char* EMBEDDED_JSON = R"({
+    "connections": [
+        {
+            "fromNode": 0,
+            "fromSocket": "UV",
+            "toNode": 1,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 1,
+            "fromSocket": "Vector",
+            "toNode": 3,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 4,
+            "fromSocket": "BSDF",
+            "toNode": 2,
+            "toSocket": "Surface"
+        },
+        {
+            "fromNode": 3,
+            "fromSocket": "Color",
+            "toNode": 4,
+            "toSocket": "Base Color"
+        }
+    ],
+    "nodes": [
+        {
+            "inputs": [
+                {
+                    "name": "Type",
+                    "value": 2
+                }
+            ],
+            "name": "Texture Coordinate",
+            "type": "Texture Coordinate",
+            "x": -1041,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Location",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Rotation",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": {
+                        "x": 1,
+                        "y": 1,
+                        "z": 1
+                    }
+                }
+            ],
+            "name": "Mapping",
+            "type": "Mapping",
+            "x": -691,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Surface",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                }
+            ],
+            "name": "Material Output",
+            "type": "Material Output",
+            "x": 366.92407474722154,
+            "y": 188.32472863942462
+        },
+        {
+            "filePath": "C:/Users/Minxue/Downloads/image_1.jpg",
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                }
+            ],
+            "keepAspectRatio": false,
+            "name": "Image Texture",
+            "repeat": false,
+            "scaleX": 1,
+            "scaleY": 1,
+            "stretchToFit": false,
+            "type": "Image Texture",
+            "x": -271.4570888468808,
+            "y": 131.0142722117203
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Base Color",
+                    "value": {
+                        "a": 255,
+                        "b": 200,
+                        "g": 200,
+                        "r": 200
+                    }
+                },
+                {
+                    "name": "Metallic",
+                    "value": 0
+                },
+                {
+                    "name": "Roughness",
+                    "value": 0.5
+                },
+                {
+                    "name": "IOR",
+                    "value": 1.45
+                },
+                {
+                    "name": "Alpha",
+                    "value": 1
+                },
+                {
+                    "name": "Normal",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 1
+                    }
+                }
+            ],
+            "name": "Principled BSDF",
+            "type": "Principled BSDF",
+            "x": 62.73742911153124,
+            "y": 63.53856332703225
+        }
+    ]
+})";
+    m_nodeEditor->loadFromData(QByteArray(EMBEDDED_JSON));
+}
+
+// New Material Graph (River/Water) - Used when adding new material
+void MainWindow::loadNewMaterialGraph() {
+    const char* EMBEDDED_JSON = R"({
+    "connections": [
+        {
+            "fromNode": 0,
+            "fromSocket": "UV",
+            "toNode": 1,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 1,
+            "fromSocket": "Vector",
+            "toNode": 4,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 4,
+            "fromSocket": "Color",
+            "toNode": 2,
+            "toSocket": "Water Mask"
+        },
+        {
+            "fromNode": 5,
+            "fromSocket": "Normal",
+            "toNode": 3,
+            "toSocket": "Surface"
+        },
+        {
+            "fromNode": 2,
+            "fromSocket": "Color",
+            "toNode": 5,
+            "toSocket": "Height"
+        }
+    ],
+    "nodes": [
+        {
+            "inputs": [
+                {
+                    "name": "Type",
+                    "value": 1
+                }
+            ],
+            "name": "Texture Coordinate",
+            "type": "Texture Coordinate",
+            "x": -1041,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Location",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Rotation",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": {
+                        "x": 1,
+                        "y": 1,
+                        "z": 1
+                    }
+                }
+            ],
+            "name": "Mapping",
+            "type": "Mapping",
+            "x": -691,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Water Mask",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": 5
+                },
+                {
+                    "name": "Distortion",
+                    "value": 20
+                },
+                {
+                    "name": "Width",
+                    "value": 0.02
+                },
+                {
+                    "name": "Width Variation",
+                    "value": 0.5
+                },
+                {
+                    "name": "Attenuation",
+                    "value": 0
+                },
+                {
+                    "name": "Source Count",
+                    "value": 10
+                },
+                {
+                    "name": "Points",
+                    "value": 50
+                },
+                {
+                    "name": "Seed",
+                    "value": 0
+                },
+                {
+                    "name": "Target Color",
+                    "value": {
+                        "a": 255,
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    }
+                },
+                {
+                    "name": "Tolerance",
+                    "value": 0.1
+                },
+                {
+                    "name": "Merge Distance",
+                    "value": 0.15
+                },
+                {
+                    "name": "River Color",
+                    "value": {
+                        "a": 255,
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    }
+                },
+                {
+                    "name": "Dest Color",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                },
+                {
+                    "name": "Dest Count",
+                    "value": 30
+                },
+                {
+                    "name": "Dest Tolerance",
+                    "value": 0.515
+                },
+                {
+                    "name": "Dest Merge Dist",
+                    "value": 0.15
+                },
+                {
+                    "name": "Map Size",
+                    "value": 512
+                },
+                {
+                    "name": "Min Distance",
+                    "value": 0.2725
+                }
+            ],
+            "name": "River Texture",
+            "type": "River Texture",
+            "x": 109,
+            "y": -746
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Surface",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                }
+            ],
+            "name": "Material Output",
+            "type": "Material Output",
+            "x": 1299.0449999999998,
+            "y": 76.19500000000005
+        },
+        {
+            "colorRampStops": [
+                {
+                    "color": "#ff000000",
+                    "position": 0
+                },
+                {
+                    "color": "#ffffffff",
+                    "position": 0.27058823529411763
+                }
+            ],
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Position X",
+                    "value": 0
+                },
+                {
+                    "name": "Position Y",
+                    "value": 0
+                },
+                {
+                    "name": "Distortion",
+                    "value": 0.5
+                },
+                {
+                    "name": "Noise Scale",
+                    "value": 1
+                },
+                {
+                    "name": "Detail",
+                    "value": 5.8
+                },
+                {
+                    "name": "Roughness",
+                    "value": 0.8
+                },
+                {
+                    "name": "Lacunarity",
+                    "value": 2
+                },
+                {
+                    "name": "Seed",
+                    "value": 803
+                }
+            ],
+            "name": "Water Source",
+            "type": "Water Source",
+            "x": -331,
+            "y": -489.4282467544069
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Strength",
+                    "value": 1
+                },
+                {
+                    "name": "Distance",
+                    "value": 27.3
+                },
+                {
+                    "name": "Height",
+                    "value": 0
+                },
+                {
+                    "name": "Normal",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 1
+                    }
+                }
+            ],
+            "invert": false,
+            "name": "Bump",
+            "type": "Bump",
+            "x": 680.7436428125022,
+            "y": 171.41928749999943
+        }
+    ]
+})";
+    m_nodeEditor->loadFromData(QByteArray(EMBEDDED_JSON));
 }
