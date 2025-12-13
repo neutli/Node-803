@@ -44,7 +44,7 @@ private:
     mutable QRecursiveMutex m_mutex;
     
     // Helper: compute signed distance to polygon edge
-    double polygonSDF(double x, double y, int sides, double radius, double rotation) const;
+    double polygonSDF(double x, double y, double sides, double radius, double rotation) const;
     
     // Helper: compute signed distance to arbitrary polygon
     double sdArbitraryPolygon(const QList<QVector2D>& v, const QVector2D& p) const;

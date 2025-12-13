@@ -28,8 +28,11 @@ void PolygonNode::evaluate() {
 }
 
 // Signed distance function for regular polygon
-double PolygonNode::polygonSDF(double x, double y, int sides, double radius, double rotation) const {
-    if (sides < 3) sides = 3;
+double PolygonNode::polygonSDF(double x, double y, double sides, double radius, double rotation) const {
+    // Determine effective sides. 
+    // If sides < 2.0, clamp to 2 (digon/line) to avoid division by zero or negative.
+    // User wants 2.5 to be star. Standard formula works for fractional.
+    if (sides < 1.0) sides = 1.0;
     
     // Apply rotation
     double rotRad = rotation * M_PI / 180.0;
@@ -56,68 +59,88 @@ double PolygonNode::polygonSDF(double x, double y, int sides, double radius, dou
     return projDist - edgeDist;
 }
 
+// Helper logic for fractional sides implemented in compute/generate
+// sdStar removed to rely on robust sdArbitraryPolygon with reordered vertices
+
+
 QVariant PolygonNode::compute(const QVector3D& pos, NodeSocket* socket) {
     QMutexLocker locker(&m_mutex);
     
-    // Get input coordinates
     QVector3D vec;
     if (m_vectorInput->isConnected()) {
         vec = m_vectorInput->getValue(pos).value<QVector3D>();
     } else {
-        // Normalize to -0.5 to 0.5 (centered)
         vec = QVector3D(pos.x() / 512.0 - 0.5, pos.y() / 512.0 - 0.5, 0.0);
     }
     
-    // Use member parameters
-    double sides = qBound(3.0, m_sides, 32.0);
+    double sides = qBound(2.0, m_sides, 32.0);
     double radius = qBound(0.01, m_radius, 1.0);
     double rotation = m_rotation;
     
-    // Intepolate between floor(sides) and ceil(sides) for smooth transition
-    int sidesFloored = static_cast<int>(std::floor(sides));
-    int sidesCeiled = static_cast<int>(std::ceil(sides));
-    double fract = sides - sidesFloored;
-    
     double sdf;
     
-    // Regular polygon (Seed == 0) - Use analytical formula (faster/exact)
     if (m_seed == 0) {
-        if (sidesFloored == sidesCeiled) {
-            sdf = polygonSDF(vec.x(), vec.y(), sidesFloored, radius, rotation);
+        // Star Detection: Check if sides is fractional P/Q
+        int bestP = -1, bestQ = -1;
+        double minErr = 0.01;
+        
+        // Only check for stars if fraction is significant
+        if (std::abs(sides - std::round(sides)) > 0.01) {
+            for (int q = 2; q <= 5; ++q) {
+                double pFloat = sides * q;
+                int pInt = static_cast<int>(std::round(pFloat));
+                if (std::abs(pFloat - pInt) < minErr) {
+                    bestP = pInt;
+                    bestQ = q;
+                    break;
+                }
+            }
+        }
+        
+        if (bestP != -1) {
+            // Found fractional star (e.g. 2.5 -> 5/2)
+            // Generate P vertices on the circle
+            QList<QVector2D> polyVerts = generateVertices(bestP, radius, rotation, 0);
+            
+            // Reorder vertices based on stride Q
+            // e.g. 5/2: 0 -> 2 -> 4 -> 1 -> 3 -> (0)
+            QList<QVector2D> starVerts;
+            int currentIdx = 0;
+            // We need to visit all vertices. 
+            // For standard star polygons (P, Q coprime), this loops P times.
+            bool *visited = new bool[bestP]; // Simple safety
+            for(int i=0; i<bestP; ++i) visited[i] = false;
+            
+            for (int i = 0; i < bestP; ++i) {
+                starVerts.append(polyVerts[currentIdx]);
+                visited[currentIdx] = true;
+                currentIdx = (currentIdx + bestQ) % bestP;
+            }
+            delete[] visited;
+            
+            // Render using arbitrary polygon logic which handles self-intersection (Odd-Even rule)
+            sdf = sdArbitraryPolygon(starVerts, QVector2D(vec.x(), vec.y()));
+            
         } else {
-            double d1 = polygonSDF(vec.x(), vec.y(), sidesFloored, radius, rotation);
-            double d2 = polygonSDF(vec.x(), vec.y(), sidesCeiled, radius, rotation);
-            sdf = d1 * (1.0 - fract) + d2 * fract;
+            // Regular Polygon
+            sdf = polygonSDF(vec.x(), vec.y(), sides, radius, rotation);
         }
     } else {
-        // Irregular polygon (Seed != 0) - Generate vertices
-        QVector2D p(vec.x(), vec.y());
+        // Irregular polygon (Seed != 0)
+        int sidesInt = static_cast<int>(std::round(sides));
+        if (sidesInt < 3) sidesInt = 3;
         
-        if (sidesFloored == sidesCeiled) {
-            QList<QVector2D> v = generateVertices(sidesFloored, radius, rotation, m_seed);
-            sdf = sdArbitraryPolygon(v, p);
-        } else {
-            QList<QVector2D> v1 = generateVertices(sidesFloored, radius, rotation, m_seed);
-            QList<QVector2D> v2 = generateVertices(sidesCeiled, radius, rotation, m_seed);
-            double d1 = sdArbitraryPolygon(v1, p);
-            double d2 = sdArbitraryPolygon(v2, p);
-            sdf = d1 * (1.0 - fract) + d2 * fract;
-        }
+        QVector2D p(vec.x(), vec.y());
+        QList<QVector2D> v = generateVertices(sidesInt, radius, rotation, m_seed);
+        sdf = sdArbitraryPolygon(v, p);
     }
     
-    if (socket == m_distanceOutput) {
-        // Return normalized distance (0 at edge, positive outside, negative inside)
-        return sdf;
-    }
+    if (socket == m_distanceOutput) return sdf;
     
-    // Value output
     if (m_fill) {
-        // Fill: 1 inside, 0 outside
         return sdf <= 0.0 ? 1.0 : 0.0;
     } else {
-        // Edge only: 1 on edge, 0 elsewhere
-        double edge = std::abs(sdf) < m_edgeWidth ? 1.0 : 0.0;
-        return edge;
+        return std::abs(sdf) < m_edgeWidth ? 1.0 : 0.0;
     }
 }
 
@@ -128,7 +151,7 @@ QVector<Node::ParameterInfo> PolygonNode::parameters() const {
     ParameterInfo sidesInfo;
     sidesInfo.type = ParameterInfo::Float; // Changed from Int
     sidesInfo.name = "Sides";
-    sidesInfo.min = 3.0;
+    sidesInfo.min = 2.0;
     sidesInfo.max = 32.0;
     sidesInfo.defaultValue = m_sides;
     sidesInfo.step = 0.1; // Finer step for smooth transition
@@ -234,17 +257,36 @@ void PolygonNode::setSeed(int v) { m_seed = v; setDirty(true); }
 double PolygonNode::sdArbitraryPolygon(const QList<QVector2D>& v, const QVector2D& p) const {
     double d = QVector2D::dotProduct(p - v[0], p - v[0]);
     double s = 1.0;
+    int winding = 0;
+    
     for (int i = 0, j = v.size() - 1; i < v.size(); j = i, i++) {
         QVector2D e = v[j] - v[i];
         QVector2D w = p - v[i];
-        QVector2D b = w - e * qBound(0.0, QVector2D::dotProduct(w, e) / QVector2D::dotProduct(e, e), 1.0);
+        QVector2D b = w - e * std::clamp(QVector2D::dotProduct(w, e) / QVector2D::dotProduct(e, e), 0.0, 1.0);
+        
+        // Exact distance to segment
         d = std::min(d, static_cast<double>(QVector2D::dotProduct(b, b)));
         
+        // Winding Number Calculation
         bool cond1 = p.y() >= v[i].y();
         bool cond2 = p.y() < v[j].y();
-        bool cond3 = e.x() * w.y() > e.y() * w.x();
-        if ((cond1 && cond2 && cond3) || (!cond1 && !cond2 && !cond3)) s *= -1.0;
+        
+        if (cond1 && cond2) {
+             // Upward crossing
+             // Check if P is to the left of edge
+             if (e.x() * w.y() - e.y() * w.x() > 0) winding++;
+        } else if (!cond1 && !cond2) {
+             // Downward crossing (v[j].y <= p.y < v[i].y)
+             // Check if P is to the right? No, standard algorithm:
+             // if (v[i].y > p.y && v[j].y <= p.y)
+             if (e.x() * w.y() - e.y() * w.x() < 0) winding--;
+        }
     }
+    
+    // Determine sign based on winding number (Non-Zero Rule)
+    // If winding != 0, we are inside.
+    if (winding != 0) s = -1.0;
+    
     return s * std::sqrt(d);
 }
 
