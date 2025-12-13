@@ -492,7 +492,18 @@ void NodeGraphicsItem::updateLayout() {
             PopupAwareComboBox* combo = new PopupAwareComboBox();
             combo->setStyle(QStyleFactory::create("Fusion")); 
             combo->setFixedWidth(120);
-            combo->view()->installEventFilter(new WheelEventFilter(combo));
+            
+            // Filter wheel events on the combo itself to prevent scene zooming and handle value change
+            combo->installEventFilter(new WheelEventFilter([combo](int delta) {
+                int count = combo->count();
+                if (count == 0) return;
+                int index = std::clamp(combo->currentIndex() + delta, 0, count - 1);
+                combo->setCurrentIndex(index);
+            }, combo));
+            
+            // Also install on view to prevent bubbling if necessary, though view usually handles it.
+            // Actually, keep view default behavior (scrolling list) is better when popup is open.
+            // So ONLY install on combo.
             
             QPalette pal = combo->palette();
             pal.setColor(QPalette::Base, QColor(0x2d, 0x2d, 0x2d));
