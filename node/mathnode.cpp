@@ -9,27 +9,110 @@ MathNode::MathNode()
     , m_useClamp(false)
 {
     // Inputs
-    m_value1Input = new NodeSocket("Value", SocketType::Float, SocketDirection::Input, this);
+    m_value1Input = new NodeSocket("Value A", SocketType::Float, SocketDirection::Input, this);
     m_value1Input->setDefaultValue(0.5);
     addInputSocket(m_value1Input);
 
-    m_value2Input = new NodeSocket("Value", SocketType::Float, SocketDirection::Input, this);
+    m_value2Input = new NodeSocket("Value B", SocketType::Float, SocketDirection::Input, this);
     m_value2Input->setDefaultValue(0.5);
     addInputSocket(m_value2Input);
     
-    m_value3Input = new NodeSocket("Value", SocketType::Float, SocketDirection::Input, this);
+    m_value3Input = new NodeSocket("Value C", SocketType::Float, SocketDirection::Input, this);
     m_value3Input->setDefaultValue(0.0);
     addInputSocket(m_value3Input); // Only used for Multiply Add
 
     // Output
-    m_valueOutput = new NodeSocket("Value", SocketType::Float, SocketDirection::Output, this);
+    m_valueOutput = new NodeSocket("Result", SocketType::Float, SocketDirection::Output, this);
     addOutputSocket(m_valueOutput);
+
+    // Initialize visibility
+    setOperation(m_operation);
 }
 
 QVector<Node::ParameterInfo> MathNode::parameters() const {
-    return {
-        ParameterInfo("Value", -10000.0, 10000.0, 0.5)
+    QVector<ParameterInfo> params;
+
+    // Operation Enum
+    ParameterInfo opInfo;
+    opInfo.type = ParameterInfo::Combo;
+    opInfo.name = "Operation";
+    opInfo.options = { 
+        "Add", "Subtract", "Multiply", "Divide", "Multiply Add",
+        "Logarithm", "Sqrt", "Inverse Sqrt", "Absolute", "Exponent",
+        "Minimum", "Maximum", "Less Than", "Greater Than", "Sign", "Compare",
+        "Smooth Min", "Smooth Max",
+        "Round", "Ceil", "Floor", "Fraction", "Modulo", "Floored Modulo", "Wrap", "Snap", "Ping Pong",
+        "Sine", "Cosine", "Tangent", "Arcsine", "Arccosine", "Arctangent", "Arctangent2",
+        "Sinh", "Cosh", "Tanh",
+        "To Radians", "To Degrees"
     };
+    opInfo.enumNames = opInfo.options; // Populate enumNames for Generic UI support
+    opInfo.defaultValue = static_cast<int>(m_operation);
+    opInfo.setter = [this](const QVariant& v) {
+        const_cast<MathNode*>(this)->setOperation(static_cast<MathOperation>(v.toInt()));
+    };
+    params.append(opInfo);
+
+    // Clamp Bool
+    ParameterInfo clampInfo;
+    clampInfo.type = ParameterInfo::Bool;
+    clampInfo.name = "Clamp";
+    clampInfo.defaultValue = m_useClamp;
+    clampInfo.tooltip = "Clamp result to [0, 1]";
+    clampInfo.setter = [this](const QVariant& v) {
+        const_cast<MathNode*>(this)->setUseClamp(v.toBool());
+    };
+    params.append(clampInfo);
+
+    // Value Inputs (Floating point sliders for unconnected inputs)
+    // These correspond to the 3 input sockets.
+    
+    // Value A
+    ParameterInfo v1Info;
+    v1Info.type = ParameterInfo::Float;
+    v1Info.name = "Value A"; 
+    v1Info.min = -10000.0;
+    v1Info.max = 10000.0;
+    v1Info.step = 0.01;
+    if (m_value1Input) {
+        v1Info.defaultValue = m_value1Input->defaultValue();
+        v1Info.setter = [this](const QVariant& v) {
+            if (m_value1Input) m_value1Input->setDefaultValue(v);
+        };
+        params.append(v1Info);
+    }
+
+    // Value B
+    ParameterInfo v2Info;
+    v2Info.type = ParameterInfo::Float;
+    v2Info.name = "Value B";
+    v2Info.min = -10000.0;
+    v2Info.max = 10000.0;
+    v2Info.step = 0.01;
+    if (m_value2Input && m_value2Input->isVisible()) {
+        v2Info.defaultValue = m_value2Input->defaultValue();
+        v2Info.setter = [this](const QVariant& v) {
+            if (m_value2Input) m_value2Input->setDefaultValue(v);
+        };
+        params.append(v2Info);
+    }
+    
+    // Value C
+    ParameterInfo v3Info;
+    v3Info.type = ParameterInfo::Float;
+    v3Info.name = "Value C";
+    v3Info.min = -10000.0;
+    v3Info.max = 10000.0;
+    v3Info.step = 0.01;
+    if (m_value3Input && m_value3Input->isVisible()) {
+        v3Info.defaultValue = m_value3Input->defaultValue();
+        v3Info.setter = [this](const QVariant& v) {
+            if (m_value3Input) m_value3Input->setDefaultValue(v);
+        };
+        params.append(v3Info);
+    }
+
+    return params;
 }
 
 void MathNode::evaluate() {
@@ -151,6 +234,52 @@ QVariant MathNode::compute(const QVector3D& pos, NodeSocket* socket) {
 
 void MathNode::setOperation(MathOperation op) {
     m_operation = op;
+
+    // Determine required inputs
+    bool show2 = false;
+    bool show3 = false;
+
+    switch (op) {
+        // 3 Inputs
+        case MathOperation::MultiplyAdd:
+        case MathOperation::SmoothMin:
+        case MathOperation::SmoothMax:
+        case MathOperation::Wrap:
+            show2 = true;
+            show3 = true;
+            break;
+
+        // 2 Inputs
+        case MathOperation::Add:
+        case MathOperation::Subtract:
+        case MathOperation::Multiply:
+        case MathOperation::Divide:
+        case MathOperation::Logarithm:
+        case MathOperation::Exponent:
+        case MathOperation::Minimum:
+        case MathOperation::Maximum:
+        case MathOperation::LessThan:
+        case MathOperation::GreaterThan:
+        case MathOperation::Compare:
+        case MathOperation::Modulo:
+        case MathOperation::FlooredModulo:
+        case MathOperation::Snap:
+        case MathOperation::PingPong:
+        case MathOperation::Arctangent2:
+            show2 = true;
+            show3 = false;
+            break;
+
+        // 1 Input (Unary)
+        default:
+            show2 = false;
+            show3 = false;
+            break;
+    }
+
+    if (m_value2Input) m_value2Input->setVisible(show2);
+    if (m_value3Input) m_value3Input->setVisible(show3);
+
     setDirty(true);
 }
 
@@ -169,7 +298,7 @@ QJsonObject MathNode::save() const {
 void MathNode::restore(const QJsonObject& json) {
     Node::restore(json);
     if (json.contains("operation")) {
-        m_operation = static_cast<MathOperation>(json["operation"].toInt());
+        setOperation(static_cast<MathOperation>(json["operation"].toInt()));
     }
     if (json.contains("useClamp")) {
         m_useClamp = json["useClamp"].toBool();

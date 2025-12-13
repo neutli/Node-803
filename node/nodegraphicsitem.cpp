@@ -282,67 +282,11 @@ void NodeGraphicsItem::updateLayout() {
     // TextureCoordinateNode UI - (Migrated to Generic UI)
     // if (texCoordNode) { ... } removed
 
-    // RiverNode Noise Type Selector
-    if (riverNode) {
-        QWidget* container = new QWidget();
-        container->setFixedWidth(180);
-        QVBoxLayout* layout = new QVBoxLayout(container);
-        layout->setContentsMargins(5, 2, 5, 2);
-        layout->setSpacing(2);
-        
-        QLabel* label = new QLabel(AppSettings::instance().translate("Noise Type"));
-        label->setStyleSheet("color: #aaaaaa; font-size: 8pt;");
-        
-        QStringList noiseNames = {"Perlin", "Simplex", "Ridged", "White", "Gabor"};
-        
-        QPushButton* combo = new QPushButton(noiseNames[static_cast<int>(riverNode->noiseType())] + "  ▼");
-        combo->setStyleSheet(
-            "QPushButton { background-color: #383838; color: white; border: 1px solid #555; border-radius: 3px; padding: 2px; text-align: left; }"
-            "QPushButton:hover { border: 1px solid #777; }"
-        );
-        
-        QMenu* menu = new QMenu(container);  // Parent to container for proper cleanup
-        menu->setStyleSheet("QMenu { background-color: #383838; color: white; border: 1px solid #555; } QMenu::item:selected { background-color: #4a90d9; }");
-        
-        for (int i = 0; i < noiseNames.size(); ++i) {
-            QAction* action = menu->addAction(noiseNames[i]);
-            connect(action, &QAction::triggered, this, [riverNode, combo, i, this, noiseNames]() {
-                riverNode->setNoiseType(static_cast<NoiseType>(i));
-                combo->setText(noiseNames[i] + "  ▼");
-                updatePreview();
-            });
-        }
-        
-        connect(combo, &QPushButton::clicked, [menu]() {
-            menu->popup(QCursor::pos());
-        });
-        
-        // Wheel support
-        combo->installEventFilter(new WheelEventFilter([riverNode, combo, noiseNames, this](int delta) {
-            int index = static_cast<int>(riverNode->noiseType());
-            index = qBound(0, index + delta, noiseNames.size() - 1);
-            riverNode->setNoiseType(static_cast<NoiseType>(index));
-            combo->setText(noiseNames[index] + "  ▼");
-            updatePreview();
-        }));
 
-        layout->addWidget(label);
-        layout->addWidget(combo);
-        
-        container->setAttribute(Qt::WA_TranslucentBackground);
-        container->setFocusPolicy(Qt::StrongFocus);
-        container->resize(container->sizeHint());
-        
-        QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
-        proxy->setWidget(container);
-        proxy->setPos(10, yPos);
-        proxy->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        proxy->setFlag(QGraphicsItem::ItemIsFocusable, true);
-        proxy->setZValue(100);
-        m_parameterWidgets.append(proxy);
-        
-        yPos += 50;
-    }
+
+
+
+
 
     // Generic API Parameters (Global/Options)
     // Checks for parameters that don't match input sockets and creates widgets for them
@@ -365,13 +309,14 @@ void NodeGraphicsItem::updateLayout() {
             param.type != Node::ParameterInfo::Bool &&
             param.type != Node::ParameterInfo::File &&
             param.type != Node::ParameterInfo::Color &&
+            param.type != Node::ParameterInfo::Combo && 
             m_node->findInputSocket(param.name)) {
             qDebug() << "    SKIPPED (socket match)";
             continue; 
         }
 
-        if (param.type == Node::ParameterInfo::Enum) {
-            qDebug() << "    Creating Enum widget for:" << param.name << "with items:" << param.enumNames;
+        if (param.type == Node::ParameterInfo::Enum || param.type == Node::ParameterInfo::Combo) {
+            qDebug() << "    Creating Enum/Combo widget for:" << param.name << "with items:" << param.enumNames;
             QWidget* container = new QWidget();
             container->setFixedWidth(180);
             QVBoxLayout* layout = new QVBoxLayout(container);
@@ -516,10 +461,17 @@ void NodeGraphicsItem::updateLayout() {
 
             combo->setStyleSheet(
                 "QComboBox { background-color: #383838; color: white; border: 1px solid #555; border-radius: 3px; padding: 3px 5px; min-height: 18px; }"
+                "QComboBox QAbstractItemView { background-color: #383838; color: white; selection-background-color: #505050; selection-color: white; border: 1px solid #555; outline: none; }"
+                "QComboBox::item { color: white; }"
+                "QComboBox::item:selected { background-color: #505050; }"
             );
             
             for (const QString& item : param.options) {
-                combo->addItem(AppSettings::instance().translate(item));
+                if (item == "-") {
+                    combo->insertSeparator(combo->count());
+                } else {
+                    combo->addItem(AppSettings::instance().translate(item));
+                }
             }
             
             int currentIndex = param.defaultValue.toInt();
@@ -767,6 +719,8 @@ void NodeGraphicsItem::updateLayout() {
     QVector<NodeSocket*> inputSockets = m_node->inputSockets(); // Store in local variable to avoid temporary
     
     for (NodeSocket* socket : inputSockets) {
+        if (!socket->isVisible()) continue;
+
         // Reuse existing socket item if possible
         NodeGraphicsSocket* socketItem = nullptr;
         for (auto item : std::as_const(m_inputSocketItems)) {
@@ -1222,16 +1176,18 @@ void NodeGraphicsSocket::paint(QPainter* painter, const QStyleOptionGraphicsItem
     }
     
     // ソケット名
-    QColor textColor = isLight ? Qt::black : Qt::white;
-    painter->setPen(textColor);
-    
-    if (m_socket->direction() == SocketDirection::Input) {
-        painter->drawText(QPointF(SOCKET_RADIUS + 5, 4), AppSettings::instance().translate(m_socket->name()));
-    } else {
-        QFontMetrics fm(painter->font());
-        QString name = AppSettings::instance().translate(m_socket->name());
-        int textWidth = fm.horizontalAdvance(name);
-        painter->drawText(QPointF(-SOCKET_RADIUS - textWidth - 5, 4), name);
+    if (m_socket->isLabelVisible()) {
+        QColor textColor = isLight ? Qt::black : Qt::white;
+        painter->setPen(textColor);
+        
+        if (m_socket->direction() == SocketDirection::Input) {
+            painter->drawText(QPointF(SOCKET_RADIUS + 5, 4), AppSettings::instance().translate(m_socket->name()));
+        } else {
+            QFontMetrics fm(painter->font());
+            QString name = AppSettings::instance().translate(m_socket->name());
+            int textWidth = fm.horizontalAdvance(name);
+            painter->drawText(QPointF(-SOCKET_RADIUS - textWidth - 5, 4), name);
+        }
     }
 }
 

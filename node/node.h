@@ -60,6 +60,13 @@ public:
     QJsonObject save() const;
     void restore(const QJsonObject& json);
 
+    // Visibility
+    void setLabelVisible(bool visible) { m_labelVisible = visible; }
+    bool isLabelVisible() const { return m_labelVisible; }
+    
+    void setVisible(bool visible) { m_visible = visible; }
+    bool isVisible() const { return m_visible; }
+
 private:
     QString m_name;
     SocketType m_type;
@@ -68,6 +75,8 @@ private:
     QVariant m_value;
     QVariant m_defaultValue;
     QVector<NodeSocket*> m_connections;
+    bool m_labelVisible;
+    bool m_visible;
 };
 
 // ノード接続

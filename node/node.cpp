@@ -9,6 +9,8 @@ NodeSocket::NodeSocket(const QString& name, SocketType type, SocketDirection dir
     , m_type(type)
     , m_direction(direction)
     , m_parentNode(parentNode)
+    , m_labelVisible(true)
+    , m_visible(true)
 {
 }
 

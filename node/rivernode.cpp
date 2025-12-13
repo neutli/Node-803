@@ -106,6 +106,12 @@ RiverNode::~RiverNode() {}
 
 QVector<Node::ParameterInfo> RiverNode::parameters() const {
     return {
+        ParameterInfo("Noise Type", 
+            {"OpenSimplex2S", "OpenSimplex2F", "Perlin", "Simplex", "RidgedMultifractal", "White", "Ridged", "Gabor", "Everling"},
+            QVariant::fromValue(static_cast<int>(m_noiseType)),
+            [this](const QVariant& v) {
+                const_cast<RiverNode*>(this)->setNoiseType(static_cast<NoiseType>(v.toInt()));
+            }),
         ParameterInfo("Scale", 0.0, 100.0, 5.0, 0.1, "Noise frequency"),
         ParameterInfo("Distortion", 0.0, 100.0, 20.0, 0.1, "Distortion strength"),
         ParameterInfo("Width", 0.001, 0.5, 0.02, 0.001, "River width"),

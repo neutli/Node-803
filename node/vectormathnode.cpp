@@ -30,9 +30,55 @@ VectorMathNode::VectorMathNode()
 }
 
 QVector<Node::ParameterInfo> VectorMathNode::parameters() const {
-    return {
-        ParameterInfo("Scale", -10000.0, 10000.0, 1.0)
+    QVector<ParameterInfo> params;
+
+    ParameterInfo opInfo;
+    opInfo.type = ParameterInfo::Combo;
+    opInfo.name = "Operation";
+    opInfo.options = { 
+        "Add", "Subtract", "Multiply", "Divide",
+        "Cross Product", "Dot Product",
+        "Distance", "Length",
+        "Scale", "Normalize",
+        "Absolute", "Minimum", "Maximum",
+        "Floor", "Ceil", "Fraction", "Modulo", "Wrap", "Snap",
+        "Sine", "Cosine", "Tangent",
+        "Reflect", "Refract", "Faceforward"
     };
+    opInfo.defaultValue = static_cast<int>(m_operation);
+    opInfo.setter = [this](const QVariant& v) {
+        const_cast<VectorMathNode*>(this)->setOperation(static_cast<VectorMathOperation>(v.toInt()));
+    };
+    params.append(opInfo);
+    
+    // Scale parameter (dummy for UI if needed, or maybe controlled by socket only?)
+    // The previous code had "Scale" param, but m_scaleInput is a socket.
+    // If we want a default value slider for unconnected socket:
+    ParameterInfo scaleInfo("Scale", -10000.0, 10000.0, 1.0);
+    scaleInfo.setter = [this](const QVariant& v) {
+        if (m_scaleInput) m_scaleInput->setDefaultValue(v); 
+        // Note: DefaultValue update doesn't automatically dirty unless we signal.
+        // Usually implementation of setter handles this logic or NodeSocket handles it.
+        // Simpler: Just keep it if it was there, but it seems redundant if no custom logic.
+        // Let's keep it to minimize disruption, but properly link it if possible.
+        // Previous parameters() definition for Scale didn't have a setter!
+    };
+    // The previous code: ParameterInfo("Scale", -10000.0, 10000.0, 1.0) 
+    // This used the constructor that sets type=Float. But NO setter was attached?
+    // If no setter, NodeGraphicsItem might just update the value in UI but not apply it?
+    // Or NodeGraphicsItem has default handling?
+    // Node::ParameterInfo has a default constructor but usually needs a setter to be useful unless 
+    // generic mechanism uses QObject properties (which we don't seem to use here).
+    // Let's attach a setter connecting to m_scaleInput default value.
+    if (m_scaleInput) {
+        scaleInfo.defaultValue = m_scaleInput->defaultValue();
+    }
+    // Actually, let's just stick to Operation for now. The user complained about Mode.
+    // "Scale" appeared in previous code but logic was dubious. I'll restore it with a proper setter.
+    
+    params.append(scaleInfo);
+
+    return params;
 }
 
 void VectorMathNode::evaluate() {
