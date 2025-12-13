@@ -2,6 +2,7 @@
 #define NOISE_H
 
 #include <QVector>
+#include <QVector3D>
 #include <cmath>
 #include <random>
 
@@ -28,6 +29,14 @@ enum class NoiseType {
     Ridged, // Legacy
     Gabor,
     Everling // Everling Noise (Integrated Gaussian)
+};
+
+// Everling Noise Access Methods (Traversal Strategy)
+enum class EverlingAccessMethod {
+    Stack,      // DFS-like: Fractal/vein patterns
+    Random,     // Random access: Erosion/radial patterns
+    Gaussian,   // Gaussian-weighted: Clustered/cloudy patterns
+    Mixed       // 50% Stack + 50% Random (default)
 };
 
 // Perlinノイズ生成クラス
@@ -60,7 +69,10 @@ public:
     // Everling Noise (Procedural Texture via Integration)
     // mean: Gaussian Mean (controls bias/tendency)
     // stddev: Gaussian Standard Deviation (controls ruggedness)
-    double everlingNoise(double x, double y, double z, double mean, double stddev) const;
+    // accessMethod: Traversal strategy (Stack/Random/Gaussian/Mixed)
+    double everlingNoise(double x, double y, double z, double mean, double stddev, 
+                         EverlingAccessMethod accessMethod = EverlingAccessMethod::Mixed) const;
+    void clearEverlingCache() const;
 
     // Ridged Multifractal
     double ridgedMultifractal(double x, double y, double z, int octaves, double lacunarity = 2.0, double gain = 0.5, double offset = 1.0) const;
@@ -71,6 +83,17 @@ public:
     // Gabor Noise (Anisotropic)
     // anisotropy: 0.0 (isotropic) to 1.0 (highly anisotropic)
     // orientation: 0.0 to 1.0 (rotation)
+    // Gabor Noise Result
+    struct GaborResult {
+        double value;
+        double phase;
+        double intensity;
+    };
+    
+    // Gabor Noise (Anisotropic) - Returns full complex info
+    GaborResult gaborNoise(double x, double y, double z, double frequency, double anisotropy, const QVector3D& orientation) const;
+    
+    // Legacy wrapper
     double gaborNoise(double x, double y, double z, double frequency, double anisotropy, double orientation) const;
 
 
@@ -97,8 +120,9 @@ private:
     mutable QVector<double> m_everlingBuffer;
     mutable double m_cachedMean = -9999.0;
     mutable double m_cachedStdDev = -9999.0;
-    static const int EVERLING_SIZE = 64; // Limit buffer size for performance
-    void regenerateEverling(double mean, double stddev) const;
+    mutable EverlingAccessMethod m_cachedAccessMethod = EverlingAccessMethod::Mixed;
+    static const int EVERLING_SIZE = 256; // Larger buffer = less visible tiling
+    void regenerateEverling(double mean, double stddev, EverlingAccessMethod accessMethod) const;
 };
 
 #endif // NOISE_H

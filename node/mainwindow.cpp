@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "nodeeditorwidget.h"
 #include "noisetexturenode.h"
@@ -39,7 +39,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     
-    // ウィンドウタイトル設定
+    // 銈︺偅銉炽儔銈︺偪銈ゃ儓銉ō瀹?
     setWindowTitle("Node Editor - Noise Texture");
     
     // QTabWidget for tabs
@@ -99,7 +99,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_nodeEditor = new NodeEditorWidget(this);
     splitter->addWidget(m_nodeEditor);
     
-    // 結果表示エリア（右側）
+    // 绲愭灉琛ㄧず銈ㄣ儶銈紙鍙冲伌锛?
     QWidget* rightWidget = new QWidget(this);
     QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
     rightLayout->setContentsMargins(0, 0, 0, 0);
@@ -171,8 +171,8 @@ MainWindow::MainWindow(QWidget *parent)
     QVBoxLayout* viewportLayout = new QVBoxLayout(viewportGroup);
     
     // Reset button
-    QPushButton* resetBtn = new QPushButton("リセット (0-1)", viewportGroup);
-    resetBtn->setToolTip("Viewport範囲を0-1にリセット");
+    QPushButton* resetBtn = new QPushButton("Reset (0-1)", viewportGroup);
+    resetBtn->setToolTip("Reset viewport range to 0-1");
     viewportLayout->addWidget(resetBtn);
     
     // Link U/V Checkbox
@@ -381,7 +381,7 @@ MainWindow::MainWindow(QWidget *parent)
     QHBoxLayout* langLayout = new QHBoxLayout();
     m_langLabel = new QLabel("Language:", settingsTab);
     QComboBox* langCombo = new QComboBox(settingsTab);
-    langCombo->addItems({"English", "日本語", "中文"});
+    langCombo->addItems({"English", "Japanese", "Chinese"});
     langCombo->setCurrentIndex(static_cast<int>(AppSettings::instance().language()));
     connect(langCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index){
         AppSettings::instance().setLanguage(static_cast<AppSettings::Language>(index));
@@ -409,7 +409,7 @@ MainWindow::MainWindow(QWidget *parent)
     // QAction* runAction = toolbar->addAction("Run");
     // connect(runAction, &QAction::triggered, this, &MainWindow::onRunClicked);
     
-    // UIからのアクションを接続
+    // UI銇嬨倝銇偄銈偡銉с兂銈掓帴缍?
     // Note: 'actionecport' seems to be a typo in the .ui file (intended 'actionExport'?)
     if (ui->actionecport) {
         connect(ui->actionecport, &QAction::triggered, this, &MainWindow::onExportClicked);
@@ -447,6 +447,17 @@ MainWindow::MainWindow(QWidget *parent)
     QAction* loadDemoAction = new QAction("Load Demo Graph", this);
     ui->menufile->addAction(loadDemoAction);
     connect(loadDemoAction, &QAction::triggered, this, &MainWindow::onLoadDemoClicked);
+
+    // Add Multiple Images Action
+    QAction* addImagesAction = new QAction("Add Multiple Images", this);
+    ui->menufile->addAction(addImagesAction);
+    connect(addImagesAction, &QAction::triggered, this, &MainWindow::onAddMultipleImages);
+
+    // Add Multiple Nodes Action
+    QAction* addNodesAction = new QAction("Add Multiple Nodes...", this);
+    addNodesAction->setShortcut(QKeySequence("Ctrl+Shift+A"));
+    ui->menufile->addAction(addNodesAction);
+    connect(addNodesAction, &QAction::triggered, this, &MainWindow::onAddMultipleNodes);
 
     // Exit Action
     if (ui->actionexit) {
@@ -495,7 +506,7 @@ MainWindow::~MainWindow()
 }
 
 void MainWindow::onRunClicked() {
-    // 出力ノードを探す
+    // 鍑哄姏銉庛兗銉夈倰鎺仚
     OutputNode* outputNode = nullptr;
     for (Node* node : m_nodeEditor->nodes()) {
         outputNode = dynamic_cast<OutputNode*>(node);
@@ -507,7 +518,7 @@ void MainWindow::onRunClicked() {
         return;
     }
     
-    // 画像生成（TextureCoordinateノードの解像度を使用）
+    // 鐢诲儚鐢熸垚锛圱extureCoordinate銉庛兗銉夈伄瑙ｅ儚搴︺倰浣跨敤锛?
     QElapsedTimer timer;
     timer.start();
     
@@ -529,7 +540,7 @@ void MainWindow::onRunClicked() {
         }
     }
     
-    // 結果表示
+    // 绲愭灉琛ㄧず
     // Use the new OutputViewerWidget for display
     m_outputViewer->setImage(result);
     // No need to switch tabs - result is already visible in split view
@@ -657,8 +668,16 @@ void MainWindow::applyTheme() {
 
 // Material management
 void MainWindow::onAddMaterial() {
-    static int matCount = 1;
-    QString name = QString("Material.%1").arg(++matCount);
+    static int matCount = 0; // Start at 0, logic below will increment
+    QString name;
+    QString path;
+    
+    // Find a unique name
+    do {
+        matCount++;
+        name = QString("Material.%1").arg(matCount);
+        path = QCoreApplication::applicationDirPath() + "/materials/" + name + ".json";
+    } while (QFile::exists(path));
     
     // Save current graph
     // Use m_lastMaterialName to be sure what we are saving
@@ -671,9 +690,6 @@ void MainWindow::onAddMaterial() {
     m_materialCombo->addItem(name);
     // Block signals to prevent double-save logic in onMaterialChanged for this specific transition if desired,
     // but onMaterialChanged logic handles "save previous" which is consistent.
-    // However, we just saved "current". 
-    // Let's update m_lastMaterialName to the NEW name manually if we want to skip onMaterialChanged save?
-    // Actually, onMaterialChanged will see index change.
     
     m_materialCombo->setCurrentIndex(m_materialCombo->count() - 1);
     
@@ -756,176 +772,8 @@ void MainWindow::updateMaterialList() {
     // Not implemented yet - would scan materials folder
 }
 
-// Startup Graph (Image/BSDF) - Used on initial boot
+// Startup Graph - Used on initial boot (Complex River Graph)
 void MainWindow::loadStartupGraph() {
-    // Load embedded default scene
-    const char* EMBEDDED_JSON = R"({
-    "connections": [
-        {
-            "fromNode": 0,
-            "fromSocket": "UV",
-            "toNode": 1,
-            "toSocket": "Vector"
-        },
-        {
-            "fromNode": 1,
-            "fromSocket": "Vector",
-            "toNode": 3,
-            "toSocket": "Vector"
-        },
-        {
-            "fromNode": 4,
-            "fromSocket": "BSDF",
-            "toNode": 2,
-            "toSocket": "Surface"
-        },
-        {
-            "fromNode": 3,
-            "fromSocket": "Color",
-            "toNode": 4,
-            "toSocket": "Base Color"
-        }
-    ],
-    "nodes": [
-        {
-            "inputs": [
-                {
-                    "name": "Type",
-                    "value": 2
-                }
-            ],
-            "name": "Texture Coordinate",
-            "type": "Texture Coordinate",
-            "x": -1041,
-            "y": 12
-        },
-        {
-            "inputs": [
-                {
-                    "name": "Vector",
-                    "value": {
-                        "x": 0,
-                        "y": 0,
-                        "z": 0
-                    }
-                },
-                {
-                    "name": "Location",
-                    "value": {
-                        "x": 0,
-                        "y": 0,
-                        "z": 0
-                    }
-                },
-                {
-                    "name": "Rotation",
-                    "value": {
-                        "x": 0,
-                        "y": 0,
-                        "z": 0
-                    }
-                },
-                {
-                    "name": "Scale",
-                    "value": {
-                        "x": 1,
-                        "y": 1,
-                        "z": 1
-                    }
-                }
-            ],
-            "name": "Mapping",
-            "type": "Mapping",
-            "x": -691,
-            "y": 12
-        },
-        {
-            "inputs": [
-                {
-                    "name": "Surface",
-                    "value": {
-                        "a": 255,
-                        "b": 0,
-                        "g": 0,
-                        "r": 0
-                    }
-                }
-            ],
-            "name": "Material Output",
-            "type": "Material Output",
-            "x": 366.92407474722154,
-            "y": 188.32472863942462
-        },
-        {
-            "filePath": "C:/Users/Minxue/Downloads/image_1.jpg",
-            "inputs": [
-                {
-                    "name": "Vector",
-                    "value": {
-                        "x": 0,
-                        "y": 0,
-                        "z": 0
-                    }
-                }
-            ],
-            "keepAspectRatio": false,
-            "name": "Image Texture",
-            "repeat": false,
-            "scaleX": 1,
-            "scaleY": 1,
-            "stretchToFit": false,
-            "type": "Image Texture",
-            "x": -271.4570888468808,
-            "y": 131.0142722117203
-        },
-        {
-            "inputs": [
-                {
-                    "name": "Base Color",
-                    "value": {
-                        "a": 255,
-                        "b": 200,
-                        "g": 200,
-                        "r": 200
-                    }
-                },
-                {
-                    "name": "Metallic",
-                    "value": 0
-                },
-                {
-                    "name": "Roughness",
-                    "value": 0.5
-                },
-                {
-                    "name": "IOR",
-                    "value": 1.45
-                },
-                {
-                    "name": "Alpha",
-                    "value": 1
-                },
-                {
-                    "name": "Normal",
-                    "value": {
-                        "x": 0,
-                        "y": 0,
-                        "z": 1
-                    }
-                }
-            ],
-            "name": "Principled BSDF",
-            "type": "Principled BSDF",
-            "x": 62.73742911153124,
-            "y": 63.53856332703225
-        }
-    ]
-})";
-    m_nodeEditor->loadFromData(QByteArray(EMBEDDED_JSON));
-}
-
-// New Material Graph (River/Water) - Used when adding new material
-void MainWindow::loadNewMaterialGraph() {
     const char* EMBEDDED_JSON = R"({
     "connections": [
         {
@@ -1231,4 +1079,190 @@ void MainWindow::loadNewMaterialGraph() {
     ]
 })";
     m_nodeEditor->loadFromData(QByteArray(EMBEDDED_JSON));
+}
+
+// New Material Graph (Enhanced Simple) - Used when adding new material
+void MainWindow::loadNewMaterialGraph() {
+    const char* EMBEDDED_JSON = R"({
+    "connections": [
+        {
+            "fromNode": 0,
+            "fromSocket": "UV",
+            "toNode": 1,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 1,
+            "fromSocket": "Vector",
+            "toNode": 3,
+            "toSocket": "Vector"
+        },
+        {
+            "fromNode": 4,
+            "fromSocket": "BSDF",
+            "toNode": 2,
+            "toSocket": "Surface"
+        },
+        {
+            "fromNode": 3,
+            "fromSocket": "Color",
+            "toNode": 4,
+            "toSocket": "Base Color"
+        }
+    ],
+    "nodes": [
+        {
+            "inputs": [
+                {
+                    "name": "Type",
+                    "value": 2
+                }
+            ],
+            "name": "Texture Coordinate",
+            "type": "Texture Coordinate",
+            "x": -1041,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Location",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Rotation",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "value": {
+                        "x": 1,
+                        "y": 1,
+                        "z": 1
+                    }
+                }
+            ],
+            "name": "Mapping",
+            "type": "Mapping",
+            "x": -691,
+            "y": 12
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Surface",
+                    "value": {
+                        "a": 255,
+                        "b": 0,
+                        "g": 0,
+                        "r": 0
+                    }
+                }
+            ],
+            "name": "Material Output",
+            "type": "Material Output",
+            "x": 366.92407474722154,
+            "y": 188.32472863942462
+        },
+        {
+            "filePath": "C:/Users/Minxue/Downloads/image_1.jpg",
+            "inputs": [
+                {
+                    "name": "Vector",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    }
+                }
+            ],
+            "keepAspectRatio": false,
+            "name": "Image Texture",
+            "repeat": false,
+            "scaleX": 1,
+            "scaleY": 1,
+            "stretchToFit": false,
+            "type": "Image Texture",
+            "x": -271.4570888468808,
+            "y": 131.0142722117203
+        },
+        {
+            "inputs": [
+                {
+                    "name": "Base Color",
+                    "value": {
+                        "a": 255,
+                        "b": 200,
+                        "g": 200,
+                        "r": 200
+                    }
+                },
+                {
+                    "name": "Metallic",
+                    "value": 0
+                },
+                {
+                    "name": "Roughness",
+                    "value": 0.5
+                },
+                {
+                    "name": "IOR",
+                    "value": 1.45
+                },
+                {
+                    "name": "Alpha",
+                    "value": 1
+                },
+                {
+                    "name": "Normal",
+                    "value": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 1
+                    }
+                }
+            ],
+            "name": "Principled BSDF",
+            "type": "Principled BSDF",
+            "x": 62.73742911153124,
+            "y": 63.53856332703225
+        }
+    ]
+})";
+    m_nodeEditor->loadFromData(QByteArray(EMBEDDED_JSON));
+}
+
+
+
+
+
+
+
+
+void MainWindow::onAddMultipleImages() {
+    QStringList fileNames = QFileDialog::getOpenFileNames(this, 
+        tr("Open Image Files"), "", tr("Images (*.png *.jpg *.jpeg *.bmp *.tga)"));
+    if (!fileNames.isEmpty()) {
+        m_nodeEditor->addMultipleImageNodes(fileNames);
+    }
+}
+
+void MainWindow::onAddMultipleNodes() {
+    m_nodeEditor->showBulkNodeAddDialog();
 }

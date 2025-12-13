@@ -86,11 +86,15 @@ public:
     void addConnection(ConnectionGraphicsItem* connection);
     void removeConnection(ConnectionGraphicsItem* connection);
     void updateConnectionPositions();
+    
+    void setHighlighted(bool highlighted) { m_highlighted = highlighted; update(); }
+    bool isHighlighted() const { return m_highlighted; }
 
 private:
     NodeSocket* m_socket;
     QVector<ConnectionGraphicsItem*> m_connections;
     const int SOCKET_RADIUS = 6;
+    bool m_highlighted = false;
 };
 
 #endif // NODEGRAPHICSITEM_H

@@ -48,8 +48,11 @@ add_executable(NodeEditor
     colorrampnode.h
     colorrampwidget.cpp
     colorrampwidget.h
+    colorrampwidget.h
     watersourcerampwidget.cpp
     watersourcerampwidget.h
+    uicomponents.cpp
+    uicomponents.h
     mixnode.cpp
     mixnode.h
     bumpnode.cpp
@@ -85,11 +88,24 @@ add_executable(NodeEditor
     radialtilingnode.h
     calculusnode.cpp
     calculusnode.h
+    gabortexturenode.cpp
+    gabortexturenode.h
+    everlingtexturenode.cpp
+    everlingtexturenode.h
+    polygonnode.cpp
+    polygonnode.h
+    pointcreatenode.cpp
+    pointcreatenode.h
+    scatteronpointsnode.cpp
+    scatteronpointsnode.h
+    colorkeynode.cpp
+    colorkeynode.h
     outputviewerwidget.cpp
     outputviewerwidget.h
     rendercontext.cpp
     rendercontext.h
     mainwindow.ui
+    README.md
 )
 
 target_link_libraries(NodeEditor Qt6::Widgets Qt6::Concurrent)

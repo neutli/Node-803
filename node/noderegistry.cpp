@@ -24,6 +24,12 @@
 #include "bricktexturenode.h"
 #include "radialtilingnode.h"
 #include "calculusnode.h"
+#include "gabortexturenode.h"
+#include "everlingtexturenode.h"
+#include "polygonnode.h"
+#include "pointcreatenode.h"
+#include "scatteronpointsnode.h"
+#include "colorkeynode.h"
 
 NodeRegistry& NodeRegistry::instance() {
     static NodeRegistry instance;
@@ -93,4 +99,12 @@ void NodeRegistry::registerNodes() {
     registerNode("Texture", "Brick Texture", []() { return new BrickTextureNode(); });
     registerNode("Texture", "Radial Tiling", []() { return new RadialTilingNode(); });
     registerNode("Converter", "Calculus", []() { return new CalculusNode(); });
+    registerNode("Texture", "Gabor Texture", []() { return new GaborTextureNode(); });
+    registerNode("Texture", "Everling Texture", []() { return new EverlingTextureNode(); });
+    
+    // Geometry nodes
+    registerNode("Geometry", "Polygon", []() { return new PolygonNode(); });
+    registerNode("Geometry", "Point Create", []() { return new PointCreateNode(); });
+    registerNode("Geometry", "Scatter on Points", []() { return new ScatterOnPointsNode(); });
+    registerNode("Color", "Color Key", []() { return new ColorKeyNode(); });
 }

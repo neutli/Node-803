@@ -32,6 +32,8 @@ public slots:
     void onSaveClicked();
     void onLoadClicked();
     void onLoadDemoClicked();
+    void onAddMultipleImages();
+    void onAddMultipleNodes(); // New slot for bulk node add
     void onParameterChanged(); // Called when node parameters change
 
 private:

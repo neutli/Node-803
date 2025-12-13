@@ -192,28 +192,26 @@ double PerlinNoise::whiteNoise(double x, double y, double z) const {
     return static_cast<double>(hash) / 255.0;
 }
 
-// Gabor Noise (Anisotropic)
-double PerlinNoise::gaborNoise(double x, double y, double z, double frequency, double anisotropy, double orientation) const {
-    double total = 0.0;
+// Gabor Noise (Anisotropic) - Full Complex Result
+PerlinNoise::GaborResult PerlinNoise::gaborNoise(double x, double y, double z, double frequency, double anisotropy, const QVector3D& orientation) const {
+    double totalReal = 0.0;
+    double totalImag = 0.0;
     double omega = 2.0 * M_PI * frequency;
     
-    // Orientation (Rotation around Z axis for simplicity, or 3D rotation)
-    // Mapping 0.0-1.0 to 0-2PI
-    double angle = orientation * 2.0 * M_PI;
-    double cosA = std::cos(angle);
-    double sinA = std::sin(angle);
+    // 3D Orientation - normalize the vector
+    QVector3D dir = orientation.normalized();
+    if (dir.isNull()) dir = QVector3D(1, 0, 0); // Default direction
+    
+    // Build rotation matrix to align with direction
+    // We need to rotate so that the wave travels along 'dir'
+    // For simplicity, we compute the projection onto the direction
     
     // Anisotropy parameters
-    // anisotropy 0 -> isotropic (width = 1)
-    // anisotropy 1 -> thin streaks (width << 1)
-    // We control the Gaussian envelope width perpendicular to the wave direction
-    double bandwidth = 1.0; // Base bandwidth
+    // anisotropy 0 -> isotropic (spherical Gaussian)
+    // anisotropy 1 -> thin streaks (elongated along dir)
+    double bandwidth = 1.0;
     double alpha = bandwidth * bandwidth; // Width along wave direction
-    double beta = alpha / (1.0 + anisotropy * 9.0); // Width perpendicular (narrower as anisotropy increases)
-    
-    // Grid cell size (adjust based on frequency to ensure coverage)
-    // For simplicity, we use unit grid and scale input
-    // But Gabor kernels can be large. We check 3x3x3 neighbors.
+    double beta = alpha / (1.0 + anisotropy * 9.0); // Width perpendicular
     
     int ix = static_cast<int>(std::floor(x));
     int iy = static_cast<int>(std::floor(y));
@@ -226,51 +224,54 @@ double PerlinNoise::gaborNoise(double x, double y, double z, double frequency, d
                 int cellY = iy + dy;
                 int cellZ = iz + dz;
                 
-                // Random parameters for this cell's impulse
-                // We need consistent random values for position and phase
                 int hash = p[(p[(p[cellX & 255] + cellY) & 255] + cellZ) & 255];
-                int hash2 = p[(hash + 10) & 255]; // Secondary hash for phase
+                int hash2 = p[(hash + 10) & 255];
                 
-                // Jittered position within cell
+                // Jittered position
                 double px = cellX + static_cast<double>(hash) / 255.0;
                 double py = cellY + static_cast<double>(p[(hash + 1) & 255]) / 255.0;
                 double pz = cellZ + static_cast<double>(p[(hash + 2) & 255]) / 255.0;
                 
                 // Vector from impulse to point
-                double vx = x - px;
-                double vy = y - py;
-                double vz = z - pz;
+                QVector3D v(x - px, y - py, z - pz);
                 
-                // Rotate vector to align with orientation
-                // (Inverse rotation of the point is equivalent to rotating the kernel)
-                double rx = vx * cosA + vy * sinA;
-                double ry = -vx * sinA + vy * cosA;
-                double rz = vz; // 2D rotation for now, extending to 3D cylinders
+                // Project onto direction and perpendicular
+                double parallel = QVector3D::dotProduct(v, dir);
+                QVector3D perpVec = v - dir * parallel;
+                double perpSq = perpVec.lengthSquared();
                 
-                // Gaussian envelope (Anisotropic)
-                // e^(-pi * (alpha * x^2 + beta * y^2))
-                // We treat 'rx' as the wave direction
-                double distSq = alpha * rx * rx + beta * (ry * ry + rz * rz);
+                // Anisotropic Gaussian envelope
+                double distSq = alpha * parallel * parallel + beta * perpSq;
                 
-                // If distance is too far, skip (optimization)
                 if (distSq > 4.0) continue;
                 
                 double envelope = std::exp(-M_PI * distSq);
                 
-                // Harmonic (Cosine wave)
-                // cos(2*pi*f * rx + phase)
+                // Complex Gabor kernel
                 double phase = static_cast<double>(hash2) / 255.0 * 2.0 * M_PI;
-                double wave = std::cos(omega * rx + phase);
+                double arg = omega * parallel + phase;
                 
-                total += envelope * wave;
+                totalReal += envelope * std::cos(arg);
+                totalImag += envelope * std::sin(arg);
             }
         }
     }
     
-    // Normalize/Scale (Approximate)
-    // Gabor noise variance depends on density and kernel width.
-    // We apply a heuristic scaling to keep it roughly in -1..1 range
-    return (total * 0.5) + 0.5; // Shift to 0..1
+    // Compute results
+    GaborResult result;
+    result.value = (totalReal * 0.5) + 0.5; // Normalized to 0..1
+    result.intensity = std::sqrt(totalReal * totalReal + totalImag * totalImag);
+    result.phase = std::atan2(totalImag, totalReal) / (2.0 * M_PI) + 0.5; // Normalized to 0..1
+    
+    return result;
+}
+
+// Gabor Noise (Anisotropic) - Legacy wrapper
+double PerlinNoise::gaborNoise(double x, double y, double z, double frequency, double anisotropy, double orientation) const {
+    // Map orientation scalar to 3D direction (rotation around Z)
+    double angle = orientation * 2.0 * M_PI;
+    QVector3D dir(std::cos(angle), std::sin(angle), 0.0);
+    return gaborNoise(x, y, z, frequency, anisotropy, dir).value;
 }
 
 
@@ -286,7 +287,7 @@ double PerlinNoise::dot(const int g[], double x, double y, double z) {
 // Everling Noise (Integrated Gaussian)
 // Based on "Everling Noise: A Linear-Time Noise Algorithm"
 // Implements a buffered 3D noise generated by integrating Gaussian steps.
-void PerlinNoise::regenerateEverling(double mean, double stddev) const {
+void PerlinNoise::regenerateEverling(double mean, double stddev, EverlingAccessMethod accessMethod) const {
     int size = EVERLING_SIZE; // 64
     int totalSize = size * size * size;
     if (m_everlingBuffer.size() != totalSize) {
@@ -305,18 +306,46 @@ void PerlinNoise::regenerateEverling(double mean, double stddev) const {
     m_everlingBuffer[startIdx] = 0.0;
     
     std::normal_distribution<double> dist(mean, stddev);
+    std::normal_distribution<double> gaussianAccess(0.0, 0.3); // For Gaussian access method
     
     while (!frontier.isEmpty()) {
-        // Pick node (Mixed Strategy: 50% Stack / 50% Random)
-        // This creates a mix of fractal veins (DFS) and erosion (Random)
         int fIdx;
-        bool useStack = (m_rng() % 2 == 0); 
         
-        if (useStack) {
-            fIdx = frontier.size() - 1; // Last (Stack)
-        } else {
-            std::uniform_int_distribution<int> rDist(0, (int)frontier.size() - 1);
-            fIdx = rDist(m_rng); // Random
+        // Select index based on access method
+        switch (accessMethod) {
+            case EverlingAccessMethod::Stack:
+                // DFS-like: Always pick from end of frontier (creates fractal veins)
+                fIdx = frontier.size() - 1;
+                break;
+                
+            case EverlingAccessMethod::Random:
+                // Pure random: Creates radial/erosion patterns
+                {
+                    std::uniform_int_distribution<int> rDist(0, (int)frontier.size() - 1);
+                    fIdx = rDist(m_rng);
+                }
+                break;
+                
+            case EverlingAccessMethod::Gaussian:
+                // Gaussian-weighted towards recent entries: Clustered/cloudy patterns
+                {
+                    double g = gaussianAccess(m_rng);
+                    // Map Gaussian to index (centered on last entry)
+                    int offset = static_cast<int>(g * frontier.size());
+                    fIdx = std::clamp((int)frontier.size() - 1 + offset, 0, (int)frontier.size() - 1);
+                }
+                break;
+                
+            case EverlingAccessMethod::Mixed:
+            default:
+                // 50% Stack / 50% Random (default behavior)
+                if (m_rng() % 2 == 0) {
+                    fIdx = frontier.size() - 1;
+                } else {
+                    std::uniform_int_distribution<int> rDist(0, (int)frontier.size() - 1);
+                    fIdx = rDist(m_rng);
+                }
+                break;
         }
         
         int currentIdx = frontier[fIdx];
@@ -371,11 +400,16 @@ void PerlinNoise::regenerateEverling(double mean, double stddev) const {
     
     m_cachedMean = mean;
     m_cachedStdDev = stddev;
+    m_cachedAccessMethod = accessMethod;
 }
 
-double PerlinNoise::everlingNoise(double x, double y, double z, double mean, double stddev) const {
-    if (m_everlingBuffer.isEmpty() || std::abs(mean - m_cachedMean) > 0.001 || std::abs(stddev - m_cachedStdDev) > 0.001) {
-        regenerateEverling(mean, stddev);
+double PerlinNoise::everlingNoise(double x, double y, double z, double mean, double stddev, 
+                                   EverlingAccessMethod accessMethod) const {
+    if (m_everlingBuffer.isEmpty() || 
+        std::abs(mean - m_cachedMean) > 0.001 || 
+        std::abs(stddev - m_cachedStdDev) > 0.001 ||
+        accessMethod != m_cachedAccessMethod) {
+        regenerateEverling(mean, stddev, accessMethod);
     }
     
     int size = EVERLING_SIZE;
@@ -425,3 +459,7 @@ double PerlinNoise::everlingNoise(double x, double y, double z, double mean, dou
     return lerp(fz, ly0, ly1); 
 }
 
+void PerlinNoise::clearEverlingCache() const {
+    m_everlingBuffer.clear();
+    m_cachedMean = -9999.0;
+}

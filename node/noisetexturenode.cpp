@@ -53,6 +53,13 @@ NoiseTextureNode::NoiseTextureNode()
 
     m_colorOutput = new NodeSocket("Color", SocketType::Color, SocketDirection::Output, this);
     addOutputSocket(m_colorOutput);
+    
+    // Gabor-specific outputs
+    m_phaseOutput = new NodeSocket("Phase", SocketType::Float, SocketDirection::Output, this);
+    addOutputSocket(m_phaseOutput);
+    
+    m_intensityOutput = new NodeSocket("Intensity", SocketType::Float, SocketDirection::Output, this);
+    addOutputSocket(m_intensityOutput);
 }
 
 NoiseTextureNode::~NoiseTextureNode() {}
@@ -155,7 +162,7 @@ void NoiseTextureNode::evaluate()
 
             case NoiseType::Ridged: n = (1.0 - std::abs(m_noise->noise(bx, by, bz) * 2.0 - 1.0)) * 2.0 - 1.0;
                                     break;
-            case NoiseType::Everling: n = m_noise->everlingNoise(bx, by, bz, offsetVal, roughnessVal * 5.0 + 0.1) * 2.0 - 1.0; break;
+            case NoiseType::Everling: n = m_noise->everlingNoise(bx, by, bz, offsetVal, roughnessVal * 5.0 + 0.1, m_everlingAccessMethod) * 2.0 - 1.0; break;
         }
         return n;
     };
@@ -379,7 +386,7 @@ QVariant NoiseTextureNode::compute(const QVector3D &pos, NodeSocket *socket)
             case NoiseType::Gabor: n = m_noise->gaborNoise(bx, by, bz, lacunarityVal, detailVal, roughnessVal) * 2.0 - 1.0; break;
             case NoiseType::RidgedMultifractal: n = m_noise->ridgedMultifractal(bx, by, bz, octaves, lacunarityVal, roughnessVal, 1.0) * 2.0 - 1.0; break;
             case NoiseType::Ridged: n = (1.0 - std::abs(m_noise->noise(bx, by, bz) * 2.0 - 1.0)) * 2.0 - 1.0; break;
-            case NoiseType::Everling: n = m_noise->everlingNoise(bx, by, bz, offsetVal, roughnessVal * 5.0 + 0.1) * 2.0 - 1.0; break;
+            case NoiseType::Everling: n = m_noise->everlingNoise(bx, by, bz, offsetVal, roughnessVal * 5.0 + 0.1, m_everlingAccessMethod) * 2.0 - 1.0; break;
         }
         return n;
     };
@@ -517,6 +524,27 @@ QVariant NoiseTextureNode::compute(const QVector3D &pos, NodeSocket *socket)
         
         // Output as Color (clamped to 0..1 for display safety)
         return QColor::fromRgbF(qBound(0.0, r, 1.0), qBound(0.0, g, 1.0), qBound(0.0, b, 1.0));
+    } else if (socket == m_phaseOutput || socket == m_intensityOutput) {
+        // Gabor-specific outputs using complex result
+        if (currentNoiseType == NoiseType::Gabor) {
+            // For Gabor mode, use the new complex result
+            // Lacunarity -> Frequency, Detail -> Anisotropy, Roughness -> Orientation (scalar to vector)
+            double frequency = lacunarityVal;
+            double anisotropy = qBound(0.0, detailVal / 10.0, 1.0); // Normalize detail to 0-1 range
+            double orientationAngle = roughnessVal * 2.0 * M_PI;
+            QVector3D orientation(std::cos(orientationAngle), std::sin(orientationAngle), 0.0);
+            
+            PerlinNoise::GaborResult result = m_noise->gaborNoise(x, y, z, frequency, anisotropy, orientation);
+            
+            if (socket == m_phaseOutput) {
+                return result.phase;
+            } else {
+                return result.intensity;
+            }
+        } else {
+            // For non-Gabor modes, Phase/Intensity are not meaningful
+            return 0.0;
+        }
     }
     return QVariant();
 }
@@ -744,6 +772,7 @@ QJsonObject NoiseTextureNode::save() const {
     json["dimensions"] = static_cast<int>(m_dimensions);
     json["distortionType"] = static_cast<int>(m_distortionType);
     json["normalize"] = m_normalize;
+    json["everlingAccessMethod"] = static_cast<int>(m_everlingAccessMethod);
     return json;
 }
 
@@ -763,5 +792,8 @@ void NoiseTextureNode::restore(const QJsonObject& json) {
     }
     if (json.contains("normalize")) {
         m_normalize = json["normalize"].toBool();
+    }
+    if (json.contains("everlingAccessMethod")) {
+        m_everlingAccessMethod = static_cast<EverlingAccessMethod>(json["everlingAccessMethod"].toInt());
     }
 }

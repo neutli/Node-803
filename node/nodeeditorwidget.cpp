@@ -11,6 +11,7 @@
 #include "sliderspinbox.h"
 #include "noderegistry.h"
 #include "commands.h"
+#include "imagetexturenode.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
 #include <QKeyEvent>
@@ -33,8 +34,17 @@
 #include <QVBoxLayout>
 #include <QJsonArray>
 #include <QFile>
+#include <QJsonArray>
+#include <QFile>
 #include <QFileInfo>
 #include <QDir>
+#include <QMimeData>
+#include <QUrl>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QDropEvent>
+#include <QDir>
+#include <QPushButton>
 
 NodeEditorWidget::NodeEditorWidget(QWidget* parent)
     : QGraphicsView(parent)
@@ -47,6 +57,7 @@ NodeEditorWidget::NodeEditorWidget(QWidget* parent)
     , m_undoStack(new QUndoStack(this))
 {
     setFocusPolicy(Qt::StrongFocus);  // Enable keyboard events
+    setAcceptDrops(true);             // Enable drag and drop
     setupScene();
 }
 
@@ -141,6 +152,14 @@ void NodeEditorWidget::createConnection(NodeSocket* from, NodeSocket* to) {
     
     // Validate connection
     if (from->direction() == to->direction()) return;
+    
+    // Disconnect existing connections on input socket (input can only have one connection)
+    if (to->isConnected()) {
+        QList<NodeSocket*> existingConns = to->connections();
+        for (NodeSocket* existingFrom : existingConns) {
+            removeConnection(existingFrom, to);
+        }
+    }
     
     NodeConnection* connection = new NodeConnection(from, to);
     if (connection->isValid()) {
@@ -268,6 +287,83 @@ void NodeEditorWidget::mousePressEvent(QMouseEvent* event) {
         setCursor(Qt::ClosedHandCursor);
         event->accept();
         return;
+    }
+    
+    // Shift+Click on socket: Select socket for quick-connect
+    if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ShiftModifier) && 
+        !(event->modifiers() & Qt::ControlModifier)) {
+        NodeGraphicsSocket* socket = socketAt(event->pos());
+        qDebug() << "Shift+Click detected, socket at pos:" << (socket ? socket->socket()->name() : "null");
+        if (socket) {
+            // Clear previous highlight
+            if (m_selectedSocket && m_selectedSocket != socket) {
+                m_selectedSocket->setHighlighted(false);
+            }
+            m_selectedSocket = socket;
+            m_selectedSocket->setHighlighted(true);
+            qDebug() << "Selected socket:" << socket->socket()->name() << "on" << socket->socket()->parentNode()->name();
+            event->accept();
+            return;
+        }
+    }
+    
+    // Ctrl+Click on socket: Connect to previously selected socket
+    if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier) && 
+        !(event->modifiers() & Qt::ShiftModifier)) {
+        NodeGraphicsSocket* socket = socketAt(event->pos());
+        qDebug() << "Ctrl+Click detected, socket at pos:" << (socket ? socket->socket()->name() : "null") 
+                 << "selected socket:" << (m_selectedSocket ? m_selectedSocket->socket()->name() : "null");
+        if (socket && m_selectedSocket) {
+            NodeSocket* socket1 = m_selectedSocket->socket();
+            NodeSocket* socket2 = socket->socket();
+            
+            // Determine which is output and which is input
+            NodeSocket* fromSocket = nullptr;
+            NodeSocket* toSocket = nullptr;
+            
+            if (socket1->direction() == SocketDirection::Output && 
+                socket2->direction() == SocketDirection::Input) {
+                fromSocket = socket1;
+                toSocket = socket2;
+            } else if (socket1->direction() == SocketDirection::Input && 
+                       socket2->direction() == SocketDirection::Output) {
+                fromSocket = socket2;
+                toSocket = socket1;
+            }
+            
+            qDebug() << "fromSocket:" << (fromSocket ? fromSocket->name() : "null") 
+                     << "toSocket:" << (toSocket ? toSocket->name() : "null");
+            
+            if (fromSocket && toSocket && NodeConnection::isValid(fromSocket, toSocket)) {
+                // Disconnect existing connections on target input
+                if (toSocket->isConnected()) {
+                    qDebug() << "Disconnecting existing connections on" << toSocket->name();
+                    QList<NodeSocket*> connsCopy = toSocket->connections();
+                    for (NodeSocket* conn : connsCopy) {
+                        removeConnection(conn, toSocket);
+                    }
+                }
+                
+                createConnection(fromSocket, toSocket);
+                
+                // Force graphics update
+                m_scene->update();
+                viewport()->update();
+                
+                emit parameterChanged();
+                qDebug() << "Connected" << fromSocket->name() << "->" << toSocket->name();
+            } else {
+                qDebug() << "Connection invalid or sockets don't match directions";
+            }
+            
+            // Clear highlight and selection
+            if (m_selectedSocket) {
+                m_selectedSocket->setHighlighted(false);
+            }
+            m_selectedSocket = nullptr;
+            event->accept();
+            return;
+        }
     }
     
     // Ctrl+Shift+Click: Connect clicked node's first output to Material Output
@@ -754,6 +850,60 @@ void NodeEditorWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     
+    // C: Connect two selected nodes (first node's output -> second node's input)
+    if (event->key() == Qt::Key_C && !(event->modifiers() & Qt::ControlModifier)) {
+        QList<QGraphicsItem*> selected = m_scene->selectedItems();
+        
+        // Collect selected NodeGraphicsItems
+        QList<NodeGraphicsItem*> selectedNodes;
+        for (QGraphicsItem* item : selected) {
+            if (NodeGraphicsItem* nodeItem = dynamic_cast<NodeGraphicsItem*>(item)) {
+                selectedNodes.append(nodeItem);
+            }
+        }
+        
+        if (selectedNodes.size() >= 2) {
+            // Sort by X position (leftmost is source, rightmost is target)
+            std::sort(selectedNodes.begin(), selectedNodes.end(), [](NodeGraphicsItem* a, NodeGraphicsItem* b) {
+                return a->pos().x() < b->pos().x();
+            });
+            
+            Node* sourceNode = selectedNodes[0]->node();
+            Node* targetNode = selectedNodes[1]->node();
+            
+            // Find compatible output->input pair
+            NodeSocket* fromSocket = nullptr;
+            NodeSocket* toSocket = nullptr;
+            
+            for (NodeSocket* output : sourceNode->outputSockets()) {
+                for (NodeSocket* input : targetNode->inputSockets()) {
+                    if (NodeConnection::isValid(output, input)) {
+                        fromSocket = output;
+                        toSocket = input;
+                        break;
+                    }
+                }
+                if (fromSocket) break;
+            }
+            
+            if (fromSocket && toSocket) {
+                // Disconnect existing connections on target input
+                if (toSocket->isConnected()) {
+                    QList<NodeSocket*> connsCopy = toSocket->connections();
+                    for (NodeSocket* conn : connsCopy) {
+                        removeConnection(conn, toSocket);
+                    }
+                }
+                
+                // Create new connection
+                createConnection(fromSocket, toSocket);
+                emit parameterChanged();
+            }
+        }
+        event->accept();
+        return;
+    }
+    
     // R: Reset selected nodes to default state
     if (event->key() == Qt::Key_R && !(event->modifiers() & Qt::ControlModifier)) {
         QList<QGraphicsItem*> selected = m_scene->selectedItems();
@@ -782,6 +932,8 @@ void NodeEditorWidget::keyPressEvent(QKeyEvent* event) {
                         // Restore default state to the selected node
                         node->restore(defaultJson);
                         
+                        // Update layout to refresh parameter widgets
+                        nodeItem->updateLayout();
                         nodeItem->update();
                         changed = true;
                     } else {
@@ -927,13 +1079,39 @@ void NodeEditorWidget::drawForeground(QPainter* painter, const QRectF& rect) {
 }
 
 NodeGraphicsSocket* NodeEditorWidget::socketAt(const QPoint& pos) {
+    QPointF scenePos = mapToScene(pos);
+    
+    // First try direct hit
     QList<QGraphicsItem*> items = this->items(pos);
     for (QGraphicsItem* item : items) {
         if (NodeGraphicsSocket* socket = dynamic_cast<NodeGraphicsSocket*>(item)) {
             return socket;
         }
     }
-    return nullptr;
+    
+    // If direct hit failed, search in a larger area (sockets are small)
+    const int searchRadius = 25;
+    QRectF searchRect(scenePos.x() - searchRadius, scenePos.y() - searchRadius, 
+                      searchRadius * 2, searchRadius * 2);
+    QList<QGraphicsItem*> nearbyItems = m_scene->items(searchRect);
+    
+    NodeGraphicsSocket* closestSocket = nullptr;
+    double closestDist = searchRadius * searchRadius;
+    
+    for (QGraphicsItem* item : nearbyItems) {
+        if (NodeGraphicsSocket* socket = dynamic_cast<NodeGraphicsSocket*>(item)) {
+            QPointF socketCenter = socket->scenePos() + socket->boundingRect().center();
+            double dx = scenePos.x() - socketCenter.x();
+            double dy = scenePos.y() - socketCenter.y();
+            double distSq = dx*dx + dy*dy;
+            if (distSq < closestDist) {
+                closestDist = distSq;
+                closestSocket = socket;
+            }
+        }
+    }
+    
+    return closestSocket;
 }
 
 void NodeEditorWidget::contextMenuEvent(QContextMenuEvent* event) {
@@ -1385,4 +1563,179 @@ QString NodeEditorWidget::showNodeSearchMenuForConnection(const QPoint& pos, Nod
     
     delete dialog;
     return selectedNodeName;
+}
+
+// Drag and Drop Events
+void NodeEditorWidget::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void NodeEditorWidget::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void NodeEditorWidget::dropEvent(QDropEvent* event) {
+    if (event->mimeData()->hasUrls()) {
+        QStringList filePaths;
+        const QList<QUrl> urls = event->mimeData()->urls();
+        for (const QUrl& url : urls) {
+            if (url.isLocalFile()) {
+                QString path = url.toLocalFile();
+                QFileInfo fileInfo(path);
+                QString suffix = fileInfo.suffix().toLower();
+                if (suffix == "png" || suffix == "jpg" || suffix == "jpeg" || suffix == "bmp" || suffix == "tga") {
+                    filePaths.append(path);
+                }
+            }
+        }
+        
+        if (!filePaths.isEmpty()) {
+            addMultipleImageNodes(filePaths);
+            event->acceptProposedAction();
+        }
+    }
+}
+
+void NodeEditorWidget::addMultipleImageNodes(const QStringList& filePaths) {
+    if (filePaths.isEmpty()) return;
+
+    // Start position (center of current view)
+    QPointF startPos = mapToScene(viewport()->rect().center());
+    
+    // Offset for stacking
+    QPointF offset(30, 30);
+    
+    int index = 0;
+    for (const QString& path : filePaths) {
+        // Create Image Texture Node
+        Node* node = NodeRegistry::instance().createNode("Image Texture");
+        if (!node) continue;
+        
+        ImageTextureNode* imageNode = dynamic_cast<ImageTextureNode*>(node);
+        if (imageNode) {
+            imageNode->setFilePath(path);
+            
+            // Set position with offset
+            QPointF pos = startPos + (offset * index);
+            addNode(node, pos);
+            
+            index++;
+        } else {
+            delete node;
+        }
+    }
+    
+    // Emit parameter changed to update output if auto-update is on
+    emit parameterChanged();
+}
+
+void NodeEditorWidget::showBulkNodeAddDialog() {
+    QDialog* dialog = new QDialog(this);
+    dialog->setWindowTitle(AppSettings::instance().translate("Add Multiple Nodes"));
+    dialog->setWindowFlags(Qt::Popup);
+    dialog->setStyleSheet("QDialog { background-color: #404040; border: 1px solid #555; }");
+    dialog->setMinimumSize(300, 400);
+
+    QVBoxLayout* layout = new QVBoxLayout(dialog);
+    layout->setContentsMargins(5, 5, 5, 5);
+    layout->setSpacing(2);
+
+    // Search input
+    QLineEdit* searchEdit = new QLineEdit();
+    searchEdit->setPlaceholderText(AppSettings::instance().translate("Search..."));
+    searchEdit->setStyleSheet("QLineEdit { background: #333; color: white; border: 1px solid #555; padding: 5px; }");
+    layout->addWidget(searchEdit);
+
+    // Node list with MultiSelection
+    QListWidget* listWidget = new QListWidget();
+    listWidget->setSelectionMode(QAbstractItemView::MultiSelection);
+    listWidget->setStyleSheet(
+        "QListWidget { background: #383838; color: white; border: none; }"
+        "QListWidget::item { padding: 5px; }"
+        "QListWidget::item:hover { background: #505050; }"
+        "QListWidget::item:selected { background: #4a90d9; }"
+    );
+    layout->addWidget(listWidget);
+
+    // Populate list
+    QStringList categories = NodeRegistry::instance().getCategories();
+    for (const QString& category : categories) {
+        QStringList nodeNames = NodeRegistry::instance().getNodesByCategory(category);
+        for (const QString& nodeName : nodeNames) {
+            QString translatedName = AppSettings::instance().translate(nodeName);
+            QString translatedCategory = AppSettings::instance().translate(category);
+            QListWidgetItem* item = new QListWidgetItem(translatedName + " [" + translatedCategory + "]");
+            item->setData(Qt::UserRole, nodeName);
+            listWidget->addItem(item);
+        }
+    }
+
+    // Filter function
+    connect(searchEdit, &QLineEdit::textChanged, [listWidget](const QString& text) {
+        QString filter = text.toLower();
+        for (int i = 0; i < listWidget->count(); ++i) {
+            QListWidgetItem* item = listWidget->item(i);
+            bool visible = filter.isEmpty() || item->text().toLower().contains(filter);
+            item->setHidden(!visible);
+        }
+    });
+
+    // Add Button
+    QPushButton* addButton = new QPushButton(AppSettings::instance().translate("Add Selected Nodes"));
+    addButton->setStyleSheet("QPushButton { background: #4a90d9; color: white; padding: 8px; border: none; border-radius: 4px; } QPushButton:hover { background: #5da0e9; }");
+    layout->addWidget(addButton);
+
+    connect(addButton, &QPushButton::clicked, dialog, &QDialog::accept);
+
+    // Center dialog
+    dialog->move(this->mapToGlobal(this->rect().center()) - dialog->rect().center());
+    searchEdit->setFocus();
+
+    if (dialog->exec() == QDialog::Accepted) {
+        QStringList selectedNodeNames;
+        QList<QListWidgetItem*> items = listWidget->selectedItems();
+        for (QListWidgetItem* item : items) {
+            selectedNodeNames.append(item->data(Qt::UserRole).toString());
+        }
+        
+        if (!selectedNodeNames.isEmpty()) {
+            // Position near center of view
+            QPointF centerPos = mapToScene(viewport()->rect().center());
+            addBulkNodes(selectedNodeNames, centerPos);
+        }
+    }
+    delete dialog;
+}
+
+void NodeEditorWidget::addBulkNodes(const QStringList& nodeNames, const QPointF& startPos) {
+    if (nodeNames.isEmpty()) return;
+    
+    // Arrange nodes in a simple grid or flow
+    QPointF currentPos = startPos;
+    int offsetX = 250; // Horizontal spacing
+    int offsetY = 200; // Vertical spacing (wrap)
+    int count = 0;
+    int columns = std::ceil(std::sqrt(nodeNames.size())); // Try to make a square-ish shape
+    if (columns < 2) columns = 2;
+
+    for (const QString& name : nodeNames) {
+        Node* newNode = NodeRegistry::instance().createNode(name);
+        if (newNode) {
+            addNode(newNode, currentPos);
+            
+            // Calculate next position
+            count++;
+            if (count % columns == 0) {
+                currentPos.setX(startPos.x());
+                currentPos.setY(currentPos.y() + offsetY);
+            } else {
+                currentPos.setX(currentPos.x() + offsetX);
+            }
+        }
+    }
+    emit parameterChanged();
 }

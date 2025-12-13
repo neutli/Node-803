@@ -59,8 +59,15 @@ void BrickTextureNode::evaluate() {
 QVector<Node::ParameterInfo> BrickTextureNode::parameters() const {
     QVector<ParameterInfo> params;
     
-    // Inputs are sockets, skip them. Parameters are custom properties.
+    // Socket-matching parameters (enables UI widgets for unconnected sockets)
+    params.append(ParameterInfo("Scale", 0.1, 50.0, m_scaleInput->defaultValue().toDouble(), 0.1, "Overall scale"));
+    params.append(ParameterInfo("Mortar Size", 0.0, 0.5, m_mortarSizeInput->defaultValue().toDouble(), 0.01, "Mortar width"));
+    params.append(ParameterInfo("Mortar Smooth", 0.0, 1.0, m_mortarSmoothInput->defaultValue().toDouble(), 0.01, "Mortar smoothness"));
+    params.append(ParameterInfo("Bias", -1.0, 1.0, m_biasInput->defaultValue().toDouble(), 0.01, "Color bias"));
+    params.append(ParameterInfo("Brick Width", 0.01, 1.0, m_brickWidthInput->defaultValue().toDouble(), 0.01, "Brick width ratio"));
+    params.append(ParameterInfo("Row Height", 0.01, 1.0, m_rowHeightInput->defaultValue().toDouble(), 0.01, "Row height ratio"));
     
+    // Custom parameters (not sockets)
     ParameterInfo offsetParam("Offset", 0.0, 1.0, m_offset, 0.01, "Row Offset");
     offsetParam.setter = [this](const QVariant& v) { const_cast<BrickTextureNode*>(this)->setOffset(v.toDouble()); };
     params.append(offsetParam);

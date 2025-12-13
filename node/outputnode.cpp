@@ -3,9 +3,9 @@
 #include "rendercontext.h"
 #include "appsettings.h"
 #include <QVector>
+#include <QVector4D>
 #include <QSemaphore>
 #include <QThreadPool>
-#include "appsettings.h"
 
 OutputNode::OutputNode()
     : Node("Material Output")
@@ -76,7 +76,15 @@ QImage OutputNode::render(const QVector<Node*>& nodes) const {
             QVariant result = sourceNode->compute(pixelPos, sourceSocket);
             
             QColor color;
-            if (result.canConvert<QColor>()) {
+            if (result.canConvert<QVector4D>()) {
+                // RGBA color with alpha channel (from Color Key, etc.)
+                QVector4D vec = result.value<QVector4D>();
+                int r = qBound(0, static_cast<int>(vec.x() * 255.0f), 255);
+                int g = qBound(0, static_cast<int>(vec.y() * 255.0f), 255);
+                int b = qBound(0, static_cast<int>(vec.z() * 255.0f), 255);
+                int a = qBound(0, static_cast<int>(vec.w() * 255.0f), 255);
+                color = QColor(r, g, b, a);
+            } else if (result.canConvert<QColor>()) {
                 color = result.value<QColor>();
                 if (!color.isValid()) color = Qt::black;
             } else if (result.canConvert<QVector3D>()) {

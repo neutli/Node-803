@@ -65,47 +65,7 @@
 #include <QAbstractItemView>
 #include <QStyleFactory>
 
-// Helper class to detect popup events
-class PopupAwareComboBox : public QComboBox {
-    Q_OBJECT
-public:
-    using QComboBox::QComboBox;
-    
-signals:
-    void popupOpened();
-    void popupClosed();
-
-protected:
-    void showPopup() override {
-        emit popupOpened();
-        QComboBox::showPopup();
-    }
-    
-    void hidePopup() override {
-        QComboBox::hidePopup();
-        emit popupClosed();
-    }
-};
-
-class WheelEventFilter : public QObject {
-public:
-    WheelEventFilter(std::function<void(int)> callback, QObject* parent = nullptr)
-        : QObject(parent), m_callback(callback) {}
-
-protected:
-    bool eventFilter(QObject* obj, QEvent* event) override {
-        if (event->type() == QEvent::Wheel) {
-            QWheelEvent* wheelEvent = static_cast<QWheelEvent*>(event);
-            int delta = wheelEvent->angleDelta().y() > 0 ? -1 : 1;
-            m_callback(delta);
-            return true;
-        }
-        return QObject::eventFilter(obj, event);
-    }
-
-private:
-    std::function<void(int)> m_callback;
-};
+#include "uicomponents.h"
 
 NodeGraphicsItem::NodeGraphicsItem(Node* node, QGraphicsItem* parent)
     : QGraphicsObject(parent)
@@ -393,13 +353,20 @@ void NodeGraphicsItem::updateLayout() {
         qDebug() << "  Processing param:" << param.name << "type:" << param.type << "enumNames count:" << param.enumNames.size();
         
         // Skip if this parameter controls an input socket (handled later)
-        // BUT always show Enum and Bool params even if socket name matches
-        // (e.g. "Noise Type" socket exists but we still want the dropdown)
+        // Skip Float/Int params - they are rendered in input socket section
+        // Only process Enum, Bool, File, Color here (global options)
+        if (param.type == Node::ParameterInfo::Float || 
+            param.type == Node::ParameterInfo::Int) {
+            qDebug() << "    SKIPPED (Float/Int - rendered in socket section)";
+            continue;
+        }
+        
         if (param.type != Node::ParameterInfo::Enum && 
             param.type != Node::ParameterInfo::Bool &&
             param.type != Node::ParameterInfo::File &&
+            param.type != Node::ParameterInfo::Color &&
             m_node->findInputSocket(param.name)) {
-            qDebug() << "    SKIPPED (socket match for non-Enum/Bool/File)";
+            qDebug() << "    SKIPPED (socket match)";
             continue; 
         }
 
@@ -540,57 +507,6 @@ void NodeGraphicsItem::updateLayout() {
             
             yPos += check->sizeHint().height() + 2;
             
-        } else if (param.type == Node::ParameterInfo::Float || param.type == Node::ParameterInfo::Int) {
-            QWidget* container = new QWidget();
-            container->setFixedWidth(180);
-            QHBoxLayout* layout = new QHBoxLayout(container);
-            layout->setContentsMargins(5, 2, 5, 2);
-            layout->setSpacing(5);
-            
-            QLabel* label = new QLabel(AppSettings::instance().translate(param.name));
-            label->setStyleSheet("color: #aaaaaa; font-size: 8pt;");
-            
-            SliderSpinBox* spinBox = new SliderSpinBox();
-            spinBox->setSoftRange(param.min, param.max);
-            spinBox->setSpinBoxRange(-100000.0, 100000.0);
-            
-            if (param.type == Node::ParameterInfo::Int) {
-                spinBox->setSingleStep(std::max(1.0, param.step));
-                spinBox->setDecimals(0);
-            } else {
-                spinBox->setSingleStep(param.step > 0 ? param.step : 0.1);
-                spinBox->setDecimals(3);
-            }
-            
-            spinBox->setValue(param.defaultValue.toDouble());
-            
-            auto setter = param.setter;
-            connect(spinBox, &SliderSpinBox::valueChanged, this, [setter, this](double val) {
-                if (setter) {
-                    setter(val);
-                    // Defer layout update if needed (though sliders usually don't need layout rebuild unless logic depends on it)
-                    // But for consistency with other params:
-                    // QTimer::singleShot(0, this, [this]() { updateLayout(); }); 
-                    // Wait, sliders are continuous. Rebuilding layout on every drag is BAD for performance/UX.
-                    // Only update preview. Structure change should be rare for floats.
-                    m_node->setDirty(true);
-                    updatePreview();
-                }
-            });
-            
-            layout->addWidget(label);
-            layout->addWidget(spinBox);
-            
-            if (!param.tooltip.isEmpty()) container->setToolTip(param.tooltip);
-            
-            QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
-            proxy->setWidget(container);
-            proxy->setPos(10, yPos);
-            proxy->setZValue(100);
-            m_parameterWidgets.append(proxy);
-            
-            yPos += container->sizeHint().height() + 2;
-
         } else if (param.type == Node::ParameterInfo::File) {
             QWidget* container = new QWidget();
             container->setFixedWidth(200); // Slightly wider for file paths
@@ -642,6 +558,53 @@ void NodeGraphicsItem::updateLayout() {
             m_parameterWidgets.append(proxy);
             
             yPos += container->sizeHint().height() + 5;
+        } else if (param.type == Node::ParameterInfo::Color) {
+            // Color picker button
+            QWidget* container = new QWidget();
+            container->setFixedWidth(220);
+            QHBoxLayout* layout = new QHBoxLayout(container);
+            layout->setContentsMargins(5, 2, 5, 2);
+            layout->setSpacing(5);
+            
+            QLabel* label = new QLabel(AppSettings::instance().translate(param.name));
+            label->setStyleSheet("color: #aaaaaa; font-size: 9pt;");
+            
+            QPushButton* colorBtn = new QPushButton();
+            colorBtn->setFixedSize(60, 24);
+            QColor initialColor = param.defaultValue.value<QColor>();
+            colorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(initialColor.name()));
+            
+            auto setter = param.setter;
+            connect(colorBtn, &QPushButton::clicked, this, [setter, colorBtn, this]() {
+                QColor current;
+                current.setNamedColor(colorBtn->styleSheet().section("background-color: ", 1, 1).section(";", 0, 0));
+                QColor newColor = QColorDialog::getColor(current, nullptr, "Select Color", QColorDialog::DontUseNativeDialog);
+                if (newColor.isValid() && setter) {
+                    setter(newColor);
+                    colorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(newColor.name()));
+                    m_node->setDirty(true);
+                    updatePreview();
+                }
+            });
+            
+            layout->addWidget(label);
+            layout->addWidget(colorBtn);
+            layout->addStretch();
+            
+            if (!param.tooltip.isEmpty()) {
+                container->setToolTip(param.tooltip);
+            }
+            
+            container->setAttribute(Qt::WA_TranslucentBackground);
+            container->resize(container->sizeHint());
+            
+            QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
+            proxy->setWidget(container);
+            proxy->setPos(10, yPos);
+            proxy->setZValue(100);
+            m_parameterWidgets.append(proxy);
+            
+            yPos += container->sizeHint().height() + 2;
         }
     }
 
@@ -683,7 +646,7 @@ void NodeGraphicsItem::updateLayout() {
         proxy->setZValue(100);
         m_parameterWidgets.append(proxy);
         
-        yPos += 50; // Height of widget + margins
+        yPos += 100; // Height of widget (90) + margins
     }
 
     // WaterSourceNode Color Ramp UI
@@ -733,6 +696,9 @@ void NodeGraphicsItem::updateLayout() {
         socketItem->setPos(0, yPos);
         newInputItems.append(socketItem);
         
+        // Move yPos down for the socket label (socket dot is rendered at this Y)
+        yPos += 20; // Height for socket label line
+        
         // Check if we need a widget for this socket
         bool hasWidget = false;
         Node::ParameterInfo paramInfo;
@@ -753,13 +719,12 @@ void NodeGraphicsItem::updateLayout() {
         }
 
         if (hasWidget) {
-            yPos += 20; // Move down for widget
-            
+            // Widget is placed directly below socket label
             QWidget* container = new QWidget();
-            container->setFixedWidth(180);
+            container->setFixedWidth(m_width - 20); // Full width minus margins
             QVBoxLayout* layout = new QVBoxLayout(container);
-            layout->setContentsMargins(5, 2, 5, 2);
-            layout->setSpacing(2);
+            layout->setContentsMargins(0, 0, 0, 0);
+            layout->setSpacing(0);
             
             if (socket->type() == SocketType::Float || socket->type() == SocketType::Integer) {
                 SliderSpinBox* spinBox = new SliderSpinBox();
@@ -860,17 +825,19 @@ void NodeGraphicsItem::updateLayout() {
             
             QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
             proxy->setWidget(container);
-            proxy->setPos(20, yPos);
+            proxy->setPos(10, yPos); // Left aligned with node body
             proxy->setFlag(QGraphicsItem::ItemIsSelectable, false);
             proxy->setFlag(QGraphicsItem::ItemIsFocusable, true);
             proxy->setZValue(100);
             m_parameterWidgets.append(proxy);
             
-            yPos += 30;
-            if (socket->type() == SocketType::Vector) yPos += 30; // Extra space for vector widgets
+            yPos += 30; // Widget height
+            if (socket->type() == SocketType::Vector) yPos += 30; // Extra for vector
+        } else {
+            // No widget, just add regular socket spacing
         }
         
-        yPos += m_socketSpacing;
+        yPos += m_socketSpacing - 20; // Subtract the 20 we already added for label
     }
     
     // Cleanup unused input sockets
@@ -880,6 +847,71 @@ void NodeGraphicsItem::updateLayout() {
         }
     }
     m_inputSocketItems = newInputItems;
+
+    // 4. Float/Int Parameters (rendered like input sockets, but without socket dot)
+    // These are parameters that don't have corresponding input sockets
+    QVector<Node::ParameterInfo> floatIntParams = m_node->parameters();
+    for (const auto& param : floatIntParams) {
+        if (param.type != Node::ParameterInfo::Float && param.type != Node::ParameterInfo::Int) {
+            continue; // Only process Float/Int here
+        }
+        
+        // Skip if there's a matching input socket (already handled above)
+        if (m_node->findInputSocket(param.name)) {
+            continue;
+        }
+        
+        // Draw parameter label (like a socket label but without the dot)
+        QGraphicsTextItem* label = new QGraphicsTextItem(AppSettings::instance().translate(param.name), this);
+        label->setDefaultTextColor(QColor(170, 170, 170));
+        label->setFont(QFont("Arial", 9));
+        label->setPos(15, yPos);
+        label->setZValue(50);
+        
+        yPos += 20; // Label height
+        
+        // Create widget below label
+        QWidget* container = new QWidget();
+        container->setFixedWidth(m_width - 20);
+        QVBoxLayout* layout = new QVBoxLayout(container);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
+        
+        SliderSpinBox* spinBox = new SliderSpinBox();
+        spinBox->setSoftRange(param.min, param.max);
+        spinBox->setSpinBoxRange(-100000.0, 100000.0);
+        
+        if (param.type == Node::ParameterInfo::Int) {
+            spinBox->setSingleStep(std::max(1.0, param.step));
+            spinBox->setDecimals(0);
+        } else {
+            spinBox->setSingleStep(param.step > 0 ? param.step : 0.1);
+            spinBox->setDecimals(3);
+        }
+        
+        spinBox->setValue(param.defaultValue.toDouble());
+        
+        auto setter = param.setter;
+        connect(spinBox, &SliderSpinBox::valueChanged, this, [setter, this](double val) {
+            if (setter) {
+                setter(val);
+                m_node->setDirty(true);
+                updatePreview();
+            }
+        });
+        
+        layout->addWidget(spinBox);
+        
+        if (!param.tooltip.isEmpty()) container->setToolTip(param.tooltip);
+        
+        QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
+        proxy->setWidget(container);
+        proxy->setPos(10, yPos);
+        proxy->setZValue(100);
+        m_parameterWidgets.append(proxy);
+        
+        yPos += 32; // Widget height + spacing
+    }
 
     // River Node Edge Connection Checkbox
     if (RiverNode* riverNode = dynamic_cast<RiverNode*>(m_node)) {
@@ -1095,6 +1127,13 @@ void NodeGraphicsSocket::paint(QPainter* painter, const QStyleOptionGraphicsItem
     painter->setPen(QPen(Qt::black, 1));
     painter->drawEllipse(boundingRect());
     
+    // Draw highlight ring if selected for quick-connect
+    if (m_highlighted) {
+        painter->setBrush(Qt::NoBrush);
+        painter->setPen(QPen(QColor(255, 200, 0), 3)); // Yellow ring
+        painter->drawEllipse(boundingRect().adjusted(-3, -3, 3, 3));
+    }
+    
     // ソケット名
     QColor textColor = isLight ? Qt::black : Qt::white;
     painter->setPen(textColor);
@@ -1145,4 +1184,4 @@ void NodeGraphicsSocket::updateConnectionPositions() {
     }
 }
 
-#include "nodegraphicsitem.moc"
+

@@ -79,6 +79,7 @@ private:
     Dimensions m_dimensions;
     DistortionType m_distortionType;
     bool m_normalize;
+    EverlingAccessMethod m_everlingAccessMethod = EverlingAccessMethod::Mixed; // Everling mode
     
     // ソケット参照（高速アクセス用）
     NodeSocket* m_vectorInput;
@@ -93,6 +94,8 @@ private:
     
     NodeSocket* m_facOutput;
     NodeSocket* m_colorOutput;
+    NodeSocket* m_phaseOutput;      // Gabor: Phase output
+    NodeSocket* m_intensityOutput;  // Gabor: Intensity output
 };
 
 #endif // NOISETEXTURENODE_H

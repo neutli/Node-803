@@ -43,6 +43,12 @@ public:
     
     // Theme Control
     void updateTheme();
+    
+    // Batch Import
+    // Batch Import
+    void addMultipleImageNodes(const QStringList& filePaths);
+    void showBulkNodeAddDialog(); // Dialog to select multiple node types to add
+    void addBulkNodes(const QStringList& nodeNames, const QPointF& startPos);
 
 signals:
     void parameterChanged(); // Emitted when any parameter changes
@@ -58,6 +64,9 @@ protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override;
     void drawForeground(QPainter* painter, const QRectF& rect) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void setupScene();
@@ -92,6 +101,9 @@ private:
 
     // Undo/Redo state
     QMap<Node*, QPointF> m_initialNodePositions;
+    
+    // Socket quick-connect
+    NodeGraphicsSocket* m_selectedSocket = nullptr;
 };
 
 #endif // NODEEDITORWIDGET_H
