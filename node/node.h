@@ -134,7 +134,7 @@ public:
     // Parameter definition for UI generation
     // Parameter definition for UI generation
     struct ParameterInfo {
-        enum Type { Float, Vector, Color, Enum, Int, Bool, File };
+        enum Type { Float, Vector, Color, Enum, Int, Bool, File, Combo };
         Type type;
         QString name;           // Must match input socket name OR be a custom property name
         double min;
@@ -143,6 +143,7 @@ public:
         double step;            // For slider/spinbox
         QString tooltip;        // Optional tooltip
         QStringList enumNames;  // For Enum
+        QStringList options;    // For Combo (Alias for enumNames mostly, but distinct for clarity)
         std::function<void(const QVariant&)> setter; // Callback for value change
         
         // Constructor for convenience (Float)

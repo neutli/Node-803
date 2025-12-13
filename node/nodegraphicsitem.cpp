@@ -478,6 +478,77 @@ void NodeGraphicsItem::updateLayout() {
             // No, that's complex. Let's start with this.
             
             yPos += container->sizeHint().height() + 5;
+        } else if (param.type == Node::ParameterInfo::Combo) {
+            // Same as Enum but with options from 'options' list
+            QWidget* container = new QWidget();
+            container->setFixedWidth(200);
+            QHBoxLayout* layout = new QHBoxLayout(container);
+            layout->setContentsMargins(5, 2, 5, 2);
+            layout->setSpacing(5);
+            
+            QLabel* label = new QLabel(AppSettings::instance().translate(param.name));
+            label->setStyleSheet("color: #aaaaaa; font-size: 8pt;");
+            
+            PopupAwareComboBox* combo = new PopupAwareComboBox();
+            combo->setStyle(QStyleFactory::create("Fusion")); 
+            combo->setFixedWidth(120);
+            combo->view()->installEventFilter(new WheelEventFilter(combo));
+            
+            QPalette pal = combo->palette();
+            pal.setColor(QPalette::Base, QColor(0x2d, 0x2d, 0x2d));
+            pal.setColor(QPalette::Text, Qt::white);
+            pal.setColor(QPalette::Button, QColor(0x38, 0x38, 0x38)); // Darker button
+            pal.setColor(QPalette::ButtonText, Qt::white);
+            combo->setPalette(pal);
+            // Ensure view uses the same palette
+            combo->view()->setPalette(pal);
+
+            combo->setStyleSheet(
+                "QComboBox { background-color: #383838; color: white; border: 1px solid #555; border-radius: 3px; padding: 3px 5px; min-height: 18px; }"
+            );
+            
+            for (const QString& item : param.options) {
+                combo->addItem(AppSettings::instance().translate(item));
+            }
+            
+            int currentIndex = param.defaultValue.toInt();
+            if (currentIndex >= 0 && currentIndex < combo->count()) {
+                combo->setCurrentIndex(currentIndex);
+            }
+            
+            auto setter = param.setter;
+            connect(combo, &QComboBox::currentIndexChanged, this, [setter, this](int index) {
+                if (index < 0) return;
+                if (setter) {
+                    setter(index);
+                    QTimer::singleShot(0, this, [this]() { updateLayout(); });
+                    updatePreview();
+                }
+            });
+            
+            layout->addWidget(label);
+            layout->addWidget(combo);
+            
+            if (!param.tooltip.isEmpty()) container->setToolTip(param.tooltip);
+            container->setAttribute(Qt::WA_TranslucentBackground);
+            container->resize(container->sizeHint());
+            
+            QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
+            proxy->setWidget(container);
+            proxy->setPos(10, yPos);
+            proxy->setZValue(100);
+            m_parameterWidgets.append(proxy);
+            
+            // Manage Z-Order
+            connect(combo, &PopupAwareComboBox::popupOpened, this, [proxy, this]() {
+                 for (auto* p : m_parameterWidgets) if (p != proxy) p->setZValue(-100);
+                 proxy->setZValue(10000);
+            });
+            connect(combo, &PopupAwareComboBox::popupClosed, this, [this]() {
+                for (auto* p : m_parameterWidgets) p->setZValue(100);
+            });
+            
+            yPos += container->sizeHint().height() + 5;
         } else if (param.type == Node::ParameterInfo::Bool) {
             QCheckBox* check = new QCheckBox(AppSettings::instance().translate(param.name));
             check->setStyleSheet("QCheckBox { color: #aaaaaa; font-size: 8pt; }");
@@ -577,7 +648,12 @@ void NodeGraphicsItem::updateLayout() {
             auto setter = param.setter;
             connect(colorBtn, &QPushButton::clicked, this, [setter, colorBtn, this]() {
                 QColor current;
-                current.setNamedColor(colorBtn->styleSheet().section("background-color: ", 1, 1).section(";", 0, 0));
+                // Fix for deprecated setNamedColor: Use QColor::fromString if 6.4+, or explicit constructor
+                #if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
+                    current = QColor::fromString(colorBtn->styleSheet().section("background-color: ", 1, 1).section(";", 0, 0));
+                #else
+                    current = QColor(colorBtn->styleSheet().section("background-color: ", 1, 1).section(";", 0, 0)); // String constructor
+                #endif
                 QColor newColor = QColorDialog::getColor(current, nullptr, "Select Color", QColorDialog::DontUseNativeDialog);
                 if (newColor.isValid() && setter) {
                     setter(newColor);
