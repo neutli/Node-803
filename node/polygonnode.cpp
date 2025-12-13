@@ -262,7 +262,7 @@ double PolygonNode::sdArbitraryPolygon(const QList<QVector2D>& v, const QVector2
     for (int i = 0, j = v.size() - 1; i < v.size(); j = i, i++) {
         QVector2D e = v[j] - v[i];
         QVector2D w = p - v[i];
-        QVector2D b = w - e * std::clamp(QVector2D::dotProduct(w, e) / QVector2D::dotProduct(e, e), 0.0, 1.0);
+        QVector2D b = w - e * std::clamp(QVector2D::dotProduct(w, e) / QVector2D::dotProduct(e, e), 0.0f, 1.0f);
         
         // Exact distance to segment
         d = std::min(d, static_cast<double>(QVector2D::dotProduct(b, b)));
