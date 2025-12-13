@@ -39,6 +39,11 @@ enum class EverlingAccessMethod {
     Mixed       // 50% Stack + 50% Random (default)
 };
 
+enum class EverlingPeriodicity {
+    Wrap,       // Standard tiling (Hard edges)
+    Mirror      // Ping-pong (Seamless but symmetric)
+};
+
 // Perlinノイズ生成クラス
 class PerlinNoise {
 public:
@@ -69,9 +74,16 @@ public:
     // Everling Noise (Procedural Texture via Integration)
     // mean: Gaussian Mean (controls bias/tendency)
     // stddev: Gaussian Standard Deviation (controls ruggedness)
-    // accessMethod: Traversal strategy (Stack/Random/Gaussian/Mixed)
+    // gridSize: Resolution of the simulation buffer (e.g. 256)
+    // smoothWidth: Width of the edge blending (ignored in Mirror mode)
+    // periodicity: Wrap (Standard) or Mirror (Ping-pong)
+    // distortion: Strength of domain warping (0.0 to 1.0+)
     double everlingNoise(double x, double y, double z, double mean, double stddev, 
-                         EverlingAccessMethod accessMethod = EverlingAccessMethod::Mixed) const;
+                         EverlingAccessMethod accessMethod = EverlingAccessMethod::Mixed,
+                         double clusterSpread = 0.3, bool smoothEdges = false,
+                         int gridSize = 256, double smoothWidth = 0.15,
+                         EverlingPeriodicity periodicity = EverlingPeriodicity::Wrap,
+                         double distortion = 0.0, int octaves = 1, double lacunarity = 2.0, double gain = 0.5) const;
     void clearEverlingCache() const;
 
     // Ridged Multifractal
@@ -120,9 +132,13 @@ private:
     mutable QVector<double> m_everlingBuffer;
     mutable double m_cachedMean = -9999.0;
     mutable double m_cachedStdDev = -9999.0;
+    mutable double m_cachedClusterSpread = -9999.0;
+    mutable int m_cachedSize = -1; 
     mutable EverlingAccessMethod m_cachedAccessMethod = EverlingAccessMethod::Mixed;
-    static const int EVERLING_SIZE = 256; // Larger buffer = less visible tiling
-    void regenerateEverling(double mean, double stddev, EverlingAccessMethod accessMethod) const;
+    
+    // Core Generator
+    // size: Resolution of the simulation grid (e.g. 128, 256, 512)
+    void regenerateEverling(int size, double mean, double stddev, EverlingAccessMethod accessMethod, double clusterSpread) const;
 };
 
 #endif // NOISE_H

@@ -257,6 +257,29 @@ The `Noise Texture` node is the primary generator for organic patterns. It imple
         *   `Ridged Multifractal`: Absolute value of noise, inverted. Creates sharp "canyon" or "vein" lines.
     *   **Normalize**: If checked, attempts to remap the output range (mathematically unbounded or -1..1) to exactly [0, 1].
 
+#### **Everling Texture**
+A unique "Crystal Growth" based noise algorithm. It generates patterns by simulating a random walk or crystallization process on a 3D grid. Good for biological tissues, erosion patterns, or alien surfaces.
+
+*   **Inputs**:
+    *   **Mean**: Controls the bias of the growth steps. Positive values tend to infinite growth (mountains), negative values tend to decay (valleys).
+    *   **Std Dev**: Controls the roughness/variance of the steps. Higher values make the terrain more jagged.
+    *   **Spread**: (Gaussian Mode only) Controls the tightness of the growth clusters.
+*   **Parameters**:
+    *   **Access Method**: Defines how the algorithm selects the next cell to grow from.
+        *   `Stack`: Depth-First. Creates long, vein-like fractals.
+        *   `Random`: Uniform random. Creates localized erosion/pockmarks.
+        *   `Gaussian`: Gaussian distributed. Creates cloud-like clusters.
+        *   `Mixed`: A blend of Stack and Random (50/50).
+    *   **Cluster Spread**: Controls the Gaussian distribution width for the "Gaussian" access method.
+    *   **Tile Resolution**: Controls the size of the internal simulation grid (default 256). Higher values reduce repetition frequency.
+    *   **Tiling Mode (Periodicity)**: **(New)**
+        *   `Repeat`: Standard modulo wrapping. Hard edges unless Smooth Width is used.
+        *   `Mirror`: Ping-pong wrapping. Seamless edges by symmetry. Best for continuous infinite surfaces.
+    *   **Distortion**: **(New)** Amount of domain warping applied to the coordinates before lookup. This uses a random noise field to distort the grid, effectively hiding the repetitive grid structure and creating a more organic, non-periodic look.
+    *   **Detail (Octaves)**: **(New)** Number of Fractal layers. Adds fine-grained detail by summing the noise at smaller scales. Helps break up large monochromatic clusters.
+    *   **Roughness**: Controls the influence of higher octaves (standard Fractal Gain).
+    *   **Smooth Width**: **(Legacy)** Width of edge fading in `Repeat` mode. (0.0 - 0.5).
+
 #### **Voronoi Texture**
 Generates a cellular pattern (Worley noise) by scattering points in space and calculating distances to them.
 
