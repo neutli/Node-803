@@ -44,6 +44,19 @@ namespace {
         const float RSQUARED_3D = 0.6f;
         const float RSQUARED_4D = 0.6f;
 
+        // 4D Skew/Rotation Constants (Derived from sqrt(5) and other factors)
+        const double SKEW_CONST_4D_A = -0.21132486540518699998;
+        const double SKEW_CONST_4D_B = 0.28867513459481294226;
+        const double SKEW_CONST_4D_C = 0.2236067977499788;
+        const double SKEW_CONST_4D_D = -0.57735026918962599998;
+        const double SKEW_CONST_4D_E = -0.866025403784439;
+        const double SKEW_CONST_4D_F = -0.16666666666666666;
+        const double SKEW_CONST_4D_G = -0.5;
+        const double SKEW_CONST_4D_H = -0.178275657951399372;
+        const double SKEW_CONST_4D_I = 0.215623393288842828;
+        const double SKEW_CONST_4D_J = -0.403949762580207112;
+        const double SKEW_CONST_4D_K = -0.375199083010075342;
+        
         // Gradient Data
         struct Gradients {
             std::vector<float> gradients2D;
@@ -526,42 +539,42 @@ float OpenSimplex2::noise4_UnskewedBase(int64_t seed_arg, double xs, double ys, 
 
 float OpenSimplex2::noise4_ImproveXYZ_ImproveXY(int64_t seed, double x, double y, double z, double w) {
     double xy = x + y;
-    double s2 = xy * -0.21132486540518699998;
-    double zz = z * 0.28867513459481294226;
-    double ww = w * 0.2236067977499788;
+    double s2 = xy * SKEW_CONST_4D_A;
+    double zz = z * SKEW_CONST_4D_B;
+    double ww = w * SKEW_CONST_4D_C;
     double xr = x + (zz + ww + s2);
     double yr = y + (zz + ww + s2);
-    double zr = xy * -0.57735026918962599998 + (zz + ww);
-    double wr = z * -0.866025403784439 + ww;
+    double zr = xy * SKEW_CONST_4D_D + (zz + ww);
+    double wr = z * SKEW_CONST_4D_E + ww;
     return noise4_UnskewedBase(seed, xr, yr, zr, wr);
 }
 
 float OpenSimplex2::noise4_ImproveXYZ_ImproveXZ(int64_t seed, double x, double y, double z, double w) {
     double xz = x + z;
-    double s2 = xz * -0.21132486540518699998;
-    double yy = y * 0.28867513459481294226;
-    double ww = w * 0.2236067977499788;
+    double s2 = xz * SKEW_CONST_4D_A;
+    double yy = y * SKEW_CONST_4D_B;
+    double ww = w * SKEW_CONST_4D_C;
     double xr = x + (yy + ww + s2);
     double zr = z + (yy + ww + s2);
-    double yr = xz * -0.57735026918962599998 + (yy + ww);
-    double wr = y * -0.866025403784439 + ww;
+    double yr = xz * SKEW_CONST_4D_D + (yy + ww);
+    double wr = y * SKEW_CONST_4D_E + ww;
     return noise4_UnskewedBase(seed, xr, yr, zr, wr);
 }
 
 float OpenSimplex2::noise4_ImproveXYZ(int64_t seed, double x, double y, double z, double w) {
     double xyz = x + y + z;
-    double ww = w * 0.2236067977499788;
-    double s2 = xyz * -0.16666666666666666 + ww;
+    double ww = w * SKEW_CONST_4D_C;
+    double s2 = xyz * SKEW_CONST_4D_F + ww;
     double xs = x + s2;
     double ys = y + s2;
     double zs = z + s2;
-    double ws = -0.5 * xyz + ww;
+    double ws = SKEW_CONST_4D_G * xyz + ww;
     return noise4_UnskewedBase(seed, xs, ys, zs, ws);
 }
 
 float OpenSimplex2::noise4_ImproveXY_ImproveZW(int64_t seed, double x, double y, double z, double w) {
-    double s2 = (x + y) * -0.178275657951399372 + (z + w) * 0.215623393288842828;
-    double t2 = (z + w) * -0.403949762580207112 + (x + y) * -0.375199083010075342;
+    double s2 = (x + y) * SKEW_CONST_4D_H + (z + w) * SKEW_CONST_4D_I;
+    double t2 = (z + w) * SKEW_CONST_4D_J + (x + y) * SKEW_CONST_4D_K;
     double xs = x + s2;
     double ys = y + s2;
     double zs = z + t2;

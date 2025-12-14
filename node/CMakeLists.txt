@@ -40,6 +40,8 @@ add_executable(NodeEditor
     texturecoordinatenode.h
     mathnode.cpp
     mathnode.h
+    graphnode.cpp
+    graphnode.h
     vectormathnode.cpp
     vectormathnode.h
     noderegistry.cpp
@@ -105,7 +107,6 @@ add_executable(NodeEditor
     rendercontext.cpp
     rendercontext.h
     mainwindow.ui
-    README.md
 )
 
 target_link_libraries(NodeEditor Qt6::Widgets Qt6::Concurrent)

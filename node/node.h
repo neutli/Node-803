@@ -159,16 +159,16 @@ public:
         ParameterInfo() : type(Float), min(0), max(0), defaultValue(0), step(0.1) {}
         
         // Double constructor
-        ParameterInfo(const QString& n, double mn, double mx, double def, double s = 0.1, const QString& t = "")
-            : type(Float), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t) {}
+        ParameterInfo(const QString& n, double mn, double mx, double def, double s = 0.1, const QString& t = "", std::function<void(const QVariant&)> set = nullptr)
+            : type(Float), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t), setter(set) {}
 
         // Vector3D constructor
-        ParameterInfo(const QString& n, double mn, double mx, const QVector3D& def, double s = 0.1, const QString& t = "")
-            : type(Vector), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t) {}
+        ParameterInfo(const QString& n, double mn, double mx, const QVector3D& def, double s = 0.1, const QString& t = "", std::function<void(const QVariant&)> set = nullptr)
+            : type(Vector), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t), setter(set) {}
 
         // Color constructor
-        ParameterInfo(const QString& n, double mn, double mx, const QColor& def, double s = 0.1, const QString& t = "")
-            : type(Color), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t) {}
+        ParameterInfo(const QString& n, double mn, double mx, const QColor& def, double s = 0.1, const QString& t = "", std::function<void(const QVariant&)> set = nullptr)
+            : type(Color), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t), setter(set) {}
 
         // Enum constructor
         ParameterInfo(const QString& n, const QStringList& items, const QVariant& def, 

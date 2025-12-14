@@ -4,14 +4,8 @@
 #include "noderegistry.h"
 #include "colorrampnode.h"
 #include "mixnode.h"
-#include "bumpnode.h"
 #include "maprangenode.h"
-#include "principledbsdfnode.h"
-#include "mixshadernode.h"
 #include "noisetexturenode.h"
-#include "mappingnode.h"
-#include "texturecoordinatenode.h"
-#include "outputnode.h"
 #include <QDebug>
 
 NodeGraphBuilder::NodeGraphBuilder(NodeEditorWidget* editor, QObject* parent)

@@ -138,12 +138,95 @@ double PerlinNoise::fbm(double x, double y, double z, int octaves, double lacuna
     return total;
 }
 
-// Simplex Noise (3D) - 簡易実装
+// Simplex Noise (3D) - Standard Implementation
+// Based on Stefan Gustavson's implementation
 double PerlinNoise::simplexNoise(double x, double y, double z) const {
-    // Simplexノイズは複雑なので、ここでは通常のPerlinノイズをベースにした簡易版を使用
-    // より滑らかな結果を得るために、少し異なるスケーリングを適用
-    double n = noise(x * 0.8, y * 0.8, z * 0.8);
-    return n * n * (3.0 - 2.0 * n); // スムーズステップで滑らかに
+    const double F3 = 1.0 / 3.0; // Skew factor
+    const double G3 = 1.0 / 6.0; // Unskew factor
+
+    // Skew the input space to determine which simplex cell we're in
+    double s = (x + y + z) * F3;
+    int i = static_cast<int>(std::floor(x + s));
+    int j = static_cast<int>(std::floor(y + s));
+    int k = static_cast<int>(std::floor(z + s));
+
+    double t = (i + j + k) * G3;
+    double X0 = i - t;
+    double Y0 = j - t;
+    double Z0 = k - t;
+    double x0 = x - X0;
+    double y0 = y - Y0;
+    double z0 = z - Z0;
+
+    // Determine which simplex we are in
+    int i1, j1, k1; // Offsets for second corner of simplex in (i,j,k) coords
+    int i2, j2, k2; // Offsets for third corner of simplex in (i,j,k) coords
+    
+    if (x0 >= y0) {
+        if (y0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } // X Y Z order
+        else if (x0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 0; k2 = 1; } // X Z Y order
+        else { i1 = 0; j1 = 0; k1 = 1; i2 = 1; j2 = 0; k2 = 1; } // Z X Y order
+    } else { // x0 < y0
+        if (y0 < z0) { i1 = 0; j1 = 0; k1 = 1; i2 = 0; j2 = 1; k2 = 1; } // Z Y X order
+        else if (x0 < z0) { i1 = 0; j1 = 1; k1 = 0; i2 = 0; j2 = 1; k2 = 1; } // Y Z X order
+        else { i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } // Y X Z order
+    }
+
+    // A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z),
+    // a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
+    // a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
+    // c = 1/6.
+    double x1 = x0 - i1 + G3; // Offsets for second corner in (x,y,z) coords
+    double y1 = y0 - j1 + G3;
+    double z1 = z0 - k1 + G3;
+    double x2 = x0 - i2 + 2.0 * G3; // Offsets for third corner in (x,y,z) coords
+    double y2 = y0 - j2 + 2.0 * G3;
+    double z2 = z0 - k2 + 2.0 * G3;
+    double x3 = x0 - 1.0 + 3.0 * G3; // Offsets for last corner in (x,y,z) coords
+    double y3 = y0 - 1.0 + 3.0 * G3;
+    double z3 = z0 - 1.0 + 3.0 * G3;
+
+    // Calculate the contribution from the four corners
+    double n0, n1, n2, n3;
+
+    // Corner 0
+    double t0 = 0.6 - x0 * x0 - y0 * y0 - z0 * z0;
+    if (t0 < 0) n0 = 0.0;
+    else {
+        t0 *= t0;
+        n0 = t0 * t0 * grad(p[i + p[j + p[k & 255] & 255] & 255], x0, y0, z0);
+    }
+
+    // Corner 1
+    double t1 = 0.6 - x1 * x1 - y1 * y1 - z1 * z1;
+    if (t1 < 0) n1 = 0.0;
+    else {
+        t1 *= t1;
+        n1 = t1 * t1 * grad(p[i + i1 + p[j + j1 + p[k + k1 & 255] & 255] & 255], x1, y1, z1);
+    }
+
+    // Corner 2
+    double t2 = 0.6 - x2 * x2 - y2 * y2 - z2 * z2;
+    if (t2 < 0) n2 = 0.0;
+    else {
+        t2 *= t2;
+        n2 = t2 * t2 * grad(p[i + i2 + p[j + j2 + p[k + k2 & 255] & 255] & 255], x2, y2, z2);
+    }
+
+    // Corner 3
+    double t3 = 0.6 - x3 * x3 - y3 * y3 - z3 * z3;
+    if (t3 < 0) n3 = 0.0;
+    else {
+        t3 *= t3;
+        n3 = t3 * t3 * grad(p[i + 1 + p[j + 1 + p[k + 1 & 255] & 255] & 255], x3, y3, z3);
+    }
+
+    // Add contributions from each corner to get the final noise value.
+    // The result is scaled to stay just inside [-1,1]
+    double res = 32.0 * (n0 + n1 + n2 + n3);
+
+    // Map to [0, 1] for consistency with other noise types in this application
+    return (res + 1.0) * 0.5;
 }
 
 // OpenSimplex2S (Smooth) - 3D Implementation (8-point BCC)

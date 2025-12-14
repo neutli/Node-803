@@ -1,5 +1,6 @@
 #include "noderegistry.h"
 #include "mathnode.h"
+#include "graphnode.h"
 #include "vectormathnode.h"
 #include "noisetexturenode.h"
 #include "rivernode.h"
@@ -72,6 +73,7 @@ QStringList NodeRegistry::getNodesByCategory(const QString& category) const {
 
 void NodeRegistry::registerNodes() {
     registerNode("Math", "Math", []() { return new MathNode(); });
+    registerNode("Math", "Graph", []() { return new GraphNode(); });
     registerNode("Vector", "Vector Math", []() { return new VectorMathNode(); });
     registerNode("Texture", "Noise Texture", []() { return new NoiseTextureNode(); });
     registerNode("Texture", "River Texture", []() { return new RiverNode(); });
