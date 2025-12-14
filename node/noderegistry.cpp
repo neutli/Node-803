@@ -1,6 +1,7 @@
 #include "noderegistry.h"
 #include "mathnode.h"
 #include "graphnode.h"
+#include "textnode.h"
 #include "vectormathnode.h"
 #include "noisetexturenode.h"
 #include "rivernode.h"
@@ -82,6 +83,7 @@ void NodeRegistry::registerNodes() {
     registerNode("Texture", "Voronoi Texture", []() { return new VoronoiNode(); });
     registerNode("Vector", "Mapping", []() { return new MappingNode(); });
     registerNode("Input", "Texture Coordinate", []() { return new TextureCoordinateNode(); });
+    registerNode("Texture", "Text", []() { return new TextNode(); });
     registerNode("Output", "Material Output", []() { return new OutputNode(); });
     
     // New Blender-style nodes

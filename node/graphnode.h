@@ -26,6 +26,27 @@ private:
     float m_coeffD;
     float m_thickness;
     bool m_fillBelow; // Optional: Fill area under curve
+    
+    // View Range
+    float m_xMin;
+    float m_xMax;
+    float m_yMin;
+    float m_yMax;
+    
+    bool m_showAxes;
+
+    // Custom Equation Support
+    QString m_equationStr;
+    
+    enum TokenType { Op, Number, Variable, Func };
+    struct Token {
+        TokenType type;
+        double val; // For Number
+        QString str; // For Op, Func
+    };
+    QVector<Token> m_rpn; // Reverse Polish Notation cache
+    
+    void compileEquation();
 };
 
 #endif // GRAPHNODE_H

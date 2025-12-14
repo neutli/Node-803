@@ -72,7 +72,8 @@ QVariant ImageTextureNode::compute(const QVector3D& pos, NodeSocket* socket) {
     QColor c = getColorAt(uv.x(), uv.y());
     
     if (socket == m_colorOutput) {
-        return c;
+        // Return as QVector4D (RGBA 0-1) to ensure consistent handling in OutputNode
+        return QVector4D(c.redF(), c.greenF(), c.blueF(), c.alphaF());
     } else if (socket == m_alphaOutput) {
         return c.alphaF();
     }
@@ -244,6 +245,11 @@ void ImageTextureNode::loadImage() {
     
     bool success = m_image.load(m_filePath);
     if (success) {
+        // Force conversion to RGBA8888 (explicit byte order) to match OutputNode
+        // This ensures consistant R,G,B,A channel usage
+        if (m_image.format() != QImage::Format_RGBA8888) {
+            m_image = m_image.convertToFormat(QImage::Format_RGBA8888);
+        }
         m_imageLoaded = true;
     } else {
         qDebug() << "Failed to load image:" << m_filePath;

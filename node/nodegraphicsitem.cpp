@@ -65,6 +65,7 @@
 #include <QAbstractItemView>
 #include <QStyleFactory>
 
+#include <QLineEdit>
 #include "uicomponents.h"
 
 NodeGraphicsItem::NodeGraphicsItem(Node* node, QGraphicsItem* parent)
@@ -592,6 +593,47 @@ void NodeGraphicsItem::updateLayout() {
             m_parameterWidgets.append(proxy);
             
             yPos += container->sizeHint().height() + 5;
+        } else if (param.type == Node::ParameterInfo::String) {
+            QWidget* container = new QWidget();
+            container->setFixedWidth(180);
+            QVBoxLayout* layout = new QVBoxLayout(container);
+            layout->setContentsMargins(5, 2, 5, 2);
+            layout->setSpacing(2);
+            
+            QLabel* label = new QLabel(AppSettings::instance().translate(param.name));
+            label->setStyleSheet("color: #aaaaaa; font-size: 8pt;");
+            
+            QLineEdit* edit = new QLineEdit(param.defaultValue.toString());
+            edit->setStyleSheet(
+                "QLineEdit { background-color: #383838; color: white; border: 1px solid #555; border-radius: 3px; padding: 3px; }"
+                "QLineEdit:focus { border: 1px solid #4a90d9; }"
+            );
+            
+            auto setter = param.setter;
+            connect(edit, &QLineEdit::textChanged, this, [setter, this](const QString& text) {
+                if (setter) {
+                    setter(text);
+                    // Defer layout update if necessary, but for text usually not unless size changes?
+                    // TextNode rerenders on change, so updatePreview is needed.
+                    updatePreview();
+                }
+            });
+            
+            layout->addWidget(label);
+            layout->addWidget(edit);
+            
+            if (!param.tooltip.isEmpty()) container->setToolTip(param.tooltip);
+            container->setAttribute(Qt::WA_TranslucentBackground);
+            container->resize(container->sizeHint());
+            
+            QGraphicsProxyWidget* proxy = new QGraphicsProxyWidget(this);
+            proxy->setWidget(container);
+            proxy->setPos(10, yPos);
+            proxy->setZValue(100);
+            m_parameterWidgets.append(proxy);
+            
+            yPos += container->sizeHint().height() + 5;
+            
         } else if (param.type == Node::ParameterInfo::Color) {
             // Color picker button
             QWidget* container = new QWidget();

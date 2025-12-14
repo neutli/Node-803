@@ -143,7 +143,7 @@ public:
     // Parameter definition for UI generation
     // Parameter definition for UI generation
     struct ParameterInfo {
-        enum Type { Float, Vector, Color, Enum, Int, Bool, File, Combo };
+        enum Type { Float, Vector, Color, Enum, Int, Bool, File, Combo, String };
         Type type;
         QString name;           // Must match input socket name OR be a custom property name
         double min;
@@ -158,6 +158,10 @@ public:
         // Constructor for convenience (Float)
         ParameterInfo() : type(Float), min(0), max(0), defaultValue(0), step(0.1) {}
         
+        // Generic Type Constructor (Manually specify type)
+        ParameterInfo(Type t, const QString& n, const QVariant& def, std::function<void(const QVariant&)> set = nullptr, const QString& tt = "")
+            : type(t), name(n), min(0), max(0), defaultValue(def), step(0), tooltip(tt), setter(set) {}
+
         // Double constructor
         ParameterInfo(const QString& n, double mn, double mx, double def, double s = 0.1, const QString& t = "", std::function<void(const QVariant&)> set = nullptr)
             : type(Float), name(n), min(mn), max(mx), defaultValue(def), step(s), tooltip(t), setter(set) {}
@@ -182,6 +186,20 @@ public:
         // File constructor
         ParameterInfo(const QString& n, const QString& defPath, std::function<void(const QVariant&)> set = nullptr, const QString& t = "")
             : type(File), name(n), min(0), max(0), defaultValue(defPath), step(0), tooltip(t), setter(set) {}
+
+        // Builder methods
+        ParameterInfo& range(double mn, double mx) {
+            min = mn;
+            max = mx;
+            return *this;
+        }
+
+        ParameterInfo& withOptions(const QStringList& opts) {
+            options = opts;
+            enumNames = opts; // Sync for legacy Enum support if needed
+            max = opts.size() - 1;
+            return *this;
+        }
     };
 
     // Override this to define parameters for automatic UI generation

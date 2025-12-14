@@ -350,6 +350,16 @@ QJsonObject Node::save() const {
     }
     json["inputs"] = inputsArray;
     
+    // Save Parameters (Settings)
+    QJsonObject paramsJson;
+    for (const auto& param : parameters()) {
+        // Save using the parameter name as key
+        // Note: This assumes parameters have unique names
+        // defaultValue in ParameterInfo MUST contain the CURRENT value for this to work
+        paramsJson[param.name] = QJsonValue::fromVariant(param.defaultValue);
+    }
+    json["parameters"] = paramsJson;
+    
     return json;
 }
 
@@ -365,6 +375,21 @@ void Node::restore(const QJsonObject& json) {
         NodeSocket* socket = findInputSocket(socketName);
         if (socket) {
             socket->restore(socketJson);
+        }
+    }
+    
+    // Restore Parameters
+    if (json.contains("parameters")) {
+        QJsonObject paramsJson = json["parameters"].toObject();
+        QVector<ParameterInfo> params = parameters();
+        
+        for (const auto& param : params) {
+            if (paramsJson.contains(param.name)) {
+                QJsonValue val = paramsJson[param.name];
+                if (param.setter) {
+                    param.setter(val.toVariant());
+                }
+            }
         }
     }
 }

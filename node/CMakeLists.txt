@@ -42,6 +42,8 @@ add_executable(NodeEditor
     mathnode.h
     graphnode.cpp
     graphnode.h
+    textnode.cpp
+    textnode.h
     vectormathnode.cpp
     vectormathnode.h
     noderegistry.cpp

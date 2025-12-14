@@ -8,8 +8,17 @@ PointCreateNode::PointCreateNode()
     // Input sockets
     m_vectorInput = new NodeSocket("Vector", SocketType::Vector, SocketDirection::Input, this);
     m_vectorInput->setDefaultValue(QVector3D(0, 0, 0));
-    addInputSocket(m_vectorInput);
+    addInputSocket(m_vectorInput); // 0
     
+    // Add sockets for parameters to allow external control
+    addInputSocket(new NodeSocket("Count X", SocketType::Float, SocketDirection::Input, this)); // 1
+    addInputSocket(new NodeSocket("Count Y", SocketType::Float, SocketDirection::Input, this)); // 2
+    // For 'Count', we'll use a Float socket but treat as int internally
+    addInputSocket(new NodeSocket("Count", SocketType::Float, SocketDirection::Input, this));   // 3 
+    addInputSocket(new NodeSocket("Jitter", SocketType::Float, SocketDirection::Input, this));  // 4
+    // Seed is typically constant but let's allow float input cast to int
+    addInputSocket(new NodeSocket("Seed", SocketType::Float, SocketDirection::Input, this));    // 5
+
     // Output sockets
     m_pointsOutput = new NodeSocket("Distance", SocketType::Float, SocketDirection::Output, this);
     addOutputSocket(m_pointsOutput);
@@ -149,6 +158,45 @@ int PointCreateNode::findNearestIndex(double x, double y) const {
 QVariant PointCreateNode::compute(const QVector3D& pos, NodeSocket* socket) {
     QMutexLocker locker(&m_mutex);
     
+    bool changed = false;
+    
+    if (m_inputSockets[1]->isConnected()) {
+        float val = m_inputSockets[1]->getValue(pos).toFloat();
+        int iVal = std::max(1, (int)val);
+        if (m_countX != iVal) { m_countX = iVal; changed = true; }
+    }
+    
+    if (m_inputSockets[2]->isConnected()) {
+        float val = m_inputSockets[2]->getValue(pos).toFloat();
+        int iVal = std::max(1, (int)val);
+        if (m_countY != iVal) { m_countY = iVal; changed = true; }
+    }
+
+    if (m_inputSockets[3]->isConnected()) {
+        float val = m_inputSockets[3]->getValue(pos).toFloat();
+        int iVal = std::max(1, (int)val);
+        if (m_count != iVal) { m_count = iVal; changed = true; }
+    }
+
+    if (m_inputSockets[4]->isConnected()) {
+        double val = m_inputSockets[4]->getValue(pos).toDouble();
+        if (std::abs(m_jitter - val) > 0.001) { m_jitter = val; changed = true; }
+    }
+
+    if (m_inputSockets[5]->isConnected()) {
+        float val = m_inputSockets[5]->getValue(pos).toFloat();
+        int iVal = (int)val;
+        if (m_seed != iVal) { m_seed = iVal; changed = true; }
+    }
+
+    if (changed) {
+        regeneratePoints();
+    }
+    
+    // Non-socket version called regeneratePoints() here too, 
+    // but we only need it if changed or first run.
+    // However, if logic is const-correct and uses cached values, 
+    // calling it every time is safe and cheap.
     regeneratePoints();
     
     // Get input coordinates
@@ -163,13 +211,10 @@ QVariant PointCreateNode::compute(const QVector3D& pos, NodeSocket* socket) {
     double y = vec.y();
     
     if (socket == m_pointsOutput) {
-        // Return distance to nearest point (normalized)
         double dist = findNearestDistance(x, y);
-        return std::clamp(dist * 5.0, 0.0, 1.0); // Scale for visibility
+        return std::clamp(dist * 5.0, 0.0, 1.0); 
     } else if (socket == m_colorOutput) {
-        // Return color based on nearest point index
         int idx = findNearestIndex(x, y);
-        // Generate pseudo-random color from index
         std::mt19937 rng(idx * 12345 + m_seed);
         std::uniform_real_distribution<float> cdist(0.2f, 1.0f);
         float r = cdist(rng);
@@ -189,11 +234,13 @@ QVector<Node::ParameterInfo> PointCreateNode::parameters() const {
         {"Grid", "Random", "Poisson"},
         QVariant::fromValue(static_cast<int>(m_distribution)),
         [this](const QVariant& v) {
-            const_cast<PointCreateNode*>(this)->m_distribution = static_cast<Distribution>(v.toInt());
-            const_cast<PointCreateNode*>(this)->setDirty(true);
+            auto* node = const_cast<PointCreateNode*>(this);
+            node->m_distribution = static_cast<Distribution>(v.toInt());
+            node->setDirty(true);
         },
         "Point distribution type"));
     
+    // These names MUST match the Input Sockets added above for alignment
     params.append(ParameterInfo("Count X", 1.0, 20.0, (double)m_countX, 1.0, "Grid columns"));
     params.append(ParameterInfo("Count Y", 1.0, 20.0, (double)m_countY, 1.0, "Grid rows"));
     params.append(ParameterInfo("Count", 1.0, 500.0, (double)m_count, 1.0, "Total points (Random/Poisson)"));
@@ -201,15 +248,16 @@ QVector<Node::ParameterInfo> PointCreateNode::parameters() const {
     
     ParameterInfo seedInfo;
     seedInfo.type = ParameterInfo::Int;
-    seedInfo.name = "Seed";
+    seedInfo.name = "Seed"; // Matches "Seed" socket
     seedInfo.min = 0;
     seedInfo.max = 9999;
     seedInfo.defaultValue = m_seed;
     seedInfo.step = 1;
     seedInfo.tooltip = "Random seed";
     seedInfo.setter = [this](const QVariant& v) {
-        const_cast<PointCreateNode*>(this)->m_seed = v.toInt();
-        const_cast<PointCreateNode*>(this)->setDirty(true);
+        auto* node = const_cast<PointCreateNode*>(this);
+        node->m_seed = v.toInt();
+        node->setDirty(true);
     };
     params.append(seedInfo);
     
